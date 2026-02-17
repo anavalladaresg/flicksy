@@ -16,16 +16,23 @@ export class GameRepository implements IGameRepository {
   async getPopularGames(page: number = 1): Promise<PaginatedResponse<Game>> {
     try {
       const offset = (page - 1) * LIMIT_PER_PAGE;
-      
-      const response = await igdbHttp.post('/games', {
-        query: `
+
+      const response = await igdbHttp.post(
+        '/games',
+        `
           fields id,name,summary,cover.url,rating,genres.name,platforms.name,release_dates.date;
           sort rating desc;
           limit ${LIMIT_PER_PAGE};
           offset ${offset};
           where rating != null;
         `,
-      });
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'text/plain',
+          },
+        }
+      );
 
       return {
         data: response.data,
@@ -42,14 +49,21 @@ export class GameRepository implements IGameRepository {
     try {
       const offset = (page - 1) * LIMIT_PER_PAGE;
 
-      const response = await igdbHttp.post('/games', {
-        query: `
+      const response = await igdbHttp.post(
+        '/games',
+        `
           fields id,name,summary,cover.url,rating,genres.name,platforms.name,release_dates.date;
           search "${query}";
           limit ${LIMIT_PER_PAGE};
           offset ${offset};
         `,
-      });
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'text/plain',
+          },
+        }
+      );
 
       return {
         data: response.data,
@@ -64,13 +78,20 @@ export class GameRepository implements IGameRepository {
 
   async getGameDetails(id: number): Promise<Game> {
     try {
-      const response = await igdbHttp.post('/games', {
-        query: `
+      const response = await igdbHttp.post(
+        '/games',
+        `
           fields id,name,summary,description,cover.url,rating,genres.name,
                   platforms.name,release_dates.date,storyline;
           where id = ${id};
         `,
-      });
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'text/plain',
+          },
+        }
+      );
 
       if (response.data.length === 0) {
         throw new Error('Game not found');

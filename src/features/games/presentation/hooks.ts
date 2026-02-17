@@ -8,12 +8,16 @@ import { CACHE_TIMES } from '../../../constants/config';
 import { Game, PaginatedResponse } from '../../../types';
 import { gameRepository } from '../data/repositories';
 
-export const usePopularGames = (page: number = 1): UseQueryResult<PaginatedResponse<Game>> => {
+export const usePopularGames = (
+  page: number = 1,
+  enabled: boolean = true
+): UseQueryResult<PaginatedResponse<Game>> => {
   return useQuery({
     queryKey: ['games', 'popular', page],
     queryFn: () => gameRepository.getPopularGames(page),
     staleTime: CACHE_TIMES.POPULAR,
     gcTime: CACHE_TIMES.POPULAR * 2,
+    enabled,
   });
 };
 

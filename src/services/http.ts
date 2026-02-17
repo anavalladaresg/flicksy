@@ -38,8 +38,11 @@ tmdbHttp.interceptors.request.use((config) => {
 });
 
 igdbHttp.interceptors.request.use((config) => {
-  config.headers.set('Client-ID', IGDB_CLIENT_ID);
-  config.headers.set('Authorization', `Bearer ${IGDB_ACCESS_TOKEN}`);
+  config.headers = {
+    ...config.headers,
+    'Client-ID': IGDB_CLIENT_ID,
+    Authorization: `Bearer ${IGDB_ACCESS_TOKEN}`,
+  };
   return config;
 });
 
