@@ -89,6 +89,13 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         status,
         startedAt: startedAt.trim() || undefined,
         finishedAt: finishedAt.trim() || undefined,
+        releaseYear:
+          game.release_dates && game.release_dates.length > 0
+            ? new Date(game.release_dates[0].date * 1000).getFullYear()
+            : undefined,
+        genres: game.genres?.map((genre) => genre.name) ?? [],
+        platforms: game.platforms?.map((platform) => platform.name) ?? [],
+        estimatedHours: status === 'completed' ? 35 : status === 'playing' ? 18 : 7,
       });
       setIsRatingOpen(false);
       return;
@@ -103,6 +110,13 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         status,
         startedAt: startedAt.trim() || undefined,
         finishedAt: finishedAt.trim() || undefined,
+        releaseYear:
+          game.release_dates && game.release_dates.length > 0
+            ? new Date(game.release_dates[0].date * 1000).getFullYear()
+            : undefined,
+        genres: game.genres?.map((genre) => genre.name) ?? [],
+        platforms: game.platforms?.map((platform) => platform.name) ?? [],
+        estimatedHours: status === 'completed' ? 35 : status === 'playing' ? 18 : 7,
       });
       setIsRatingOpen(false);
     }

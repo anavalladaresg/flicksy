@@ -85,6 +85,10 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         watchedAt: watchedAt.trim() || undefined,
         startedAt: undefined,
         finishedAt: undefined,
+        releaseYear: movie.release_date ? new Date(movie.release_date).getFullYear() : undefined,
+        genres: movie.genres?.map((genre) => genre.name) ?? [],
+        runtimeMinutes: movie.runtime ?? undefined,
+        estimatedHours: movie.runtime ? Math.round((movie.runtime / 60) * 10) / 10 : undefined,
       });
       setIsRatingOpen(false);
       return;
@@ -100,6 +104,10 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         watchedAt: watchedAt.trim() || undefined,
         startedAt: undefined,
         finishedAt: undefined,
+        releaseYear: movie.release_date ? new Date(movie.release_date).getFullYear() : undefined,
+        genres: movie.genres?.map((genre) => genre.name) ?? [],
+        runtimeMinutes: movie.runtime ?? undefined,
+        estimatedHours: movie.runtime ? Math.round((movie.runtime / 60) * 10) / 10 : undefined,
       });
       setIsRatingOpen(false);
     }

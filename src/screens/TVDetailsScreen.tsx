@@ -85,6 +85,10 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         status,
         startedAt: startedAt.trim() || undefined,
         finishedAt: finishedAt.trim() || undefined,
+        releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
+        genres: show.genres?.map((genre) => genre.name) ?? [],
+        estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
+        seasonsAtAdd: show.number_of_seasons ?? undefined,
       });
       setIsRatingOpen(false);
       return;
@@ -99,6 +103,10 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         status,
         startedAt: startedAt.trim() || undefined,
         finishedAt: finishedAt.trim() || undefined,
+        releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
+        genres: show.genres?.map((genre) => genre.name) ?? [],
+        estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
+        seasonsAtAdd: show.number_of_seasons ?? undefined,
       });
       setIsRatingOpen(false);
     }

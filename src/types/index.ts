@@ -112,6 +112,12 @@ export interface TrackedItem {
   watchedAt?: string; // Para películas
   startedAt?: string; // Para series/juegos
   finishedAt?: string; // Para series/juegos
+  releaseYear?: number;
+  genres?: string[];
+  platforms?: string[];
+  estimatedHours?: number;
+  runtimeMinutes?: number;
+  seasonsAtAdd?: number;
   status: 'watching' | 'completed' | 'planned' | 'dropped' | 'playing';
 }
 
