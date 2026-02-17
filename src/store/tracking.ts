@@ -28,14 +28,19 @@ export const useTrackingStore = create<TrackingState>()(
 
       addItem: (item) =>
         set((state) => ({
-          items: [
-            ...state.items,
-            {
-              ...item,
-              id: `${item.mediaType}-${item.externalId}-${Date.now()}`,
-              dateAdded: new Date().toISOString(),
-            },
-          ],
+          items: state.items.some(
+            (existing) =>
+              existing.externalId === item.externalId && existing.mediaType === item.mediaType
+          )
+            ? state.items
+            : [
+                ...state.items,
+                {
+                  ...item,
+                  id: `${item.mediaType}-${item.externalId}-${Date.now()}`,
+                  dateAdded: new Date().toISOString(),
+                },
+              ],
         })),
 
       removeItem: (id) =>

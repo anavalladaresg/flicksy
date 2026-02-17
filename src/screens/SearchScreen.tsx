@@ -1,56 +1,506 @@
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { TMDB_IMAGE_BASE_URL } from '../constants/config';
+import { useSearchGames } from '../features/games/presentation/hooks';
+import { useSearchMovies } from '../features/movies/presentation/hooks';
+import { useSearchTVShows } from '../features/tv/presentation/hooks';
+import { Game, Movie, TVShow } from '../types';
+
+const FALLBACK_IMAGE = require('../../assets/images/icon.png');
+
+type SearchType = 'all' | 'movie' | 'tv' | 'game';
+
+type MixedResult = {
+  id: number;
+  mediaType: 'movie' | 'tv' | 'game';
+  title: string;
+  imageUrl: string | null;
+  rating: number | null;
+};
+
+function stripDiacritics(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeText(value: string): string {
+  return stripDiacritics(value).toLowerCase().trim();
+}
+
+function toGameImageUrl(game: Game): string | null {
+  if (game.cover?.image_id) {
+    return `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${game.cover.image_id}.jpg`;
+  }
+  if (!game.cover?.url) return null;
+  const normalized =
+    game.cover.url.startsWith('//')
+      ? `https:${game.cover.url}`
+      : game.cover.url.startsWith('http')
+        ? game.cover.url
+        : `https://${game.cover.url}`;
+  return normalized.replace('/t_thumb/', '/t_cover_big_2x/');
+}
+
+function dedupeById<T extends { id: number }>(items: T[]): T[] {
+  const seen = new Set<number>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function containsAllWords(value: string, normalizedQuery: string): boolean {
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const normalizedValue = normalizeText(value);
+  return words.every((word) => normalizedValue.includes(word));
+}
 
 function SearchScreen() {
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const isWeb = Platform.OS === 'web';
+
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [selectedType, setSelectedType] = useState<SearchType>('all');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [query]);
+
+  const primaryQuery = debouncedQuery.trim();
+  const accentlessQuery = stripDiacritics(primaryQuery);
+  const normalizedQuery = normalizeText(primaryQuery);
+  const hasQuery = primaryQuery.length > 0;
+
+  const moviesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'movie');
+  const tvEnabled = hasQuery && (selectedType === 'all' || selectedType === 'tv');
+  const gamesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'game') && !isWeb;
+
+  const useAccentlessMovies = moviesEnabled && accentlessQuery !== primaryQuery;
+  const useAccentlessTV = tvEnabled && accentlessQuery !== primaryQuery;
+  const useAccentlessGames = gamesEnabled && accentlessQuery !== primaryQuery;
+
+  const moviesPrimary = useSearchMovies({ query: primaryQuery, page: 1 }, moviesEnabled);
+  const moviesAccentless = useSearchMovies(
+    { query: accentlessQuery, page: 1 },
+    useAccentlessMovies
+  );
+
+  const tvPrimary = useSearchTVShows({ query: primaryQuery, page: 1 }, tvEnabled);
+  const tvAccentless = useSearchTVShows({ query: accentlessQuery, page: 1 }, useAccentlessTV);
+
+  const gamesPrimary = useSearchGames(primaryQuery, 1, gamesEnabled);
+  const gamesAccentless = useSearchGames(accentlessQuery, 1, useAccentlessGames);
+
+  const movies = useMemo(() => {
+    if (!moviesEnabled) return [];
+    const merged = dedupeById<Movie>([
+      ...(moviesPrimary.data?.data ?? []),
+      ...(moviesAccentless.data?.data ?? []),
+    ]);
+    return merged.filter((item) => containsAllWords(item.title, normalizedQuery));
+  }, [moviesPrimary.data, moviesAccentless.data, normalizedQuery, moviesEnabled]);
+
+  const tvShows = useMemo(() => {
+    if (!tvEnabled) return [];
+    const merged = dedupeById<TVShow>([
+      ...(tvPrimary.data?.data ?? []),
+      ...(tvAccentless.data?.data ?? []),
+    ]);
+    return merged.filter((item) => containsAllWords(item.name, normalizedQuery));
+  }, [tvPrimary.data, tvAccentless.data, normalizedQuery, tvEnabled]);
+
+  const games = useMemo(() => {
+    if (!gamesEnabled) return [];
+    const merged = dedupeById<Game>([
+      ...(gamesPrimary.data?.data ?? []),
+      ...(gamesAccentless.data?.data ?? []),
+    ]);
+    return merged.filter((item) => containsAllWords(item.name, normalizedQuery));
+  }, [gamesPrimary.data, gamesAccentless.data, normalizedQuery, gamesEnabled]);
+
+  const mixedResults = useMemo<MixedResult[]>(() => {
+    const mixed: MixedResult[] = [
+      ...movies.map((movie) => ({
+        id: movie.id,
+        mediaType: 'movie' as const,
+        title: movie.title,
+        imageUrl: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
+        rating: movie.vote_average,
+      })),
+      ...tvShows.map((show) => ({
+        id: show.id,
+        mediaType: 'tv' as const,
+        title: show.name,
+        imageUrl: show.poster_path ? `${TMDB_IMAGE_BASE_URL}${show.poster_path}` : null,
+        rating: show.vote_average,
+      })),
+      ...games.map((game) => ({
+        id: game.id,
+        mediaType: 'game' as const,
+        title: game.name,
+        imageUrl: toGameImageUrl(game),
+        rating: game.rating ? game.rating / 10 : null,
+      })),
+    ];
+
+    return mixed.sort((a, b) => {
+      const rb = b.rating ?? -1;
+      const ra = a.rating ?? -1;
+      if (rb !== ra) return rb - ra;
+      return a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
+    });
+  }, [movies, tvShows, games]);
+
+  const isLoading =
+    (moviesEnabled && (moviesPrimary.isFetching || moviesAccentless.isFetching)) ||
+    (tvEnabled && (tvPrimary.isFetching || tvAccentless.isFetching)) ||
+    (gamesEnabled && (gamesPrimary.isFetching || gamesAccentless.isFetching));
+
+  const noResults = hasQuery && !isLoading && mixedResults.length === 0;
+
+  function toggleType(type: Exclude<SearchType, 'all'>) {
+    setSelectedType((prev) => (prev === type ? 'all' : type));
+  }
+
+  function mediaIcon(type: MixedResult['mediaType']) {
+    if (type === 'movie') return 'movie';
+    if (type === 'tv') return 'tv';
+    return 'sports-esports';
+  }
+
+  function mediaRoute(item: MixedResult) {
+    if (item.mediaType === 'movie') return `/movie/${item.id}` as const;
+    if (item.mediaType === 'tv') return `/tv/${item.id}` as const;
+    return `/game/${item.id}` as const;
+  }
+
+  const palette = {
+    background: isDark ? '#0B1220' : '#F8FAFC',
+    panel: isDark ? '#111827' : '#FFFFFF',
+    panelBorder: isDark ? '#1F2937' : '#E2E8F0',
+    text: isDark ? '#E5E7EB' : '#0F172A',
+    subtext: isDark ? '#94A3B8' : '#475569',
+    inputBg: isDark ? '#0F172A' : '#FFFFFF',
+    inputBorder: isDark ? '#334155' : '#CBD5E1',
+    chipBg: isDark ? '#111827' : '#FFFFFF',
+    chipBorder: isDark ? '#334155' : '#CBD5E1',
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🔍 Search</Text>
-      <Text style={styles.subtitle}>Find movies, TV shows, and games</Text>
-      <Text style={styles.message}>
-        Configure your .env.local file with API keys to search
-      </Text>
-      <Text style={styles.instruction}>
-        1. Copy .env.example to .env.local{'\n'}
-        2. Add TMDb API key from https://www.themoviedb.org/settings/api{'\n'}
-        3. Add IGDB credentials from https://api-docs.igdb.com/{'\n'}
-        4. Refresh the app
-      </Text>
-    </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}> 
+      <View style={[styles.header, { backgroundColor: palette.background }]}> 
+        <Text style={[styles.title, { color: palette.text }]}>Buscar</Text>
+        <View style={styles.inputWrap}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Ej: señor de los anillos, zelda, dark..."
+            placeholderTextColor={palette.subtext}
+            style={[
+              styles.input,
+              {
+                color: palette.text,
+                backgroundColor: palette.inputBg,
+                borderColor: palette.inputBorder,
+              },
+            ]}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearButton}>
+              <MaterialIcons name="close" size={16} color="#334155" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.filtersRow}>
+          <TouchableOpacity
+            onPress={() => toggleType('movie')}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: palette.chipBg,
+                borderColor: palette.chipBorder,
+              },
+              selectedType === 'movie' && styles.filterChipActive,
+            ]}
+          >
+            <MaterialIcons
+              name="movie"
+              size={16}
+              color={selectedType === 'movie' ? '#FFFFFF' : palette.subtext}
+            />
+            <Text style={[styles.filterText, { color: selectedType === 'movie' ? '#FFFFFF' : palette.subtext }]}>Películas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => toggleType('tv')}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: palette.chipBg,
+                borderColor: palette.chipBorder,
+              },
+              selectedType === 'tv' && styles.filterChipActive,
+            ]}
+          >
+            <MaterialIcons
+              name="tv"
+              size={16}
+              color={selectedType === 'tv' ? '#FFFFFF' : palette.subtext}
+            />
+            <Text style={[styles.filterText, { color: selectedType === 'tv' ? '#FFFFFF' : palette.subtext }]}>Series</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => toggleType('game')}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: palette.chipBg,
+                borderColor: palette.chipBorder,
+              },
+              selectedType === 'game' && styles.filterChipActive,
+            ]}
+          >
+            <MaterialIcons
+              name="sports-esports"
+              size={16}
+              color={selectedType === 'game' ? '#FFFFFF' : palette.subtext}
+            />
+            <Text style={[styles.filterText, { color: selectedType === 'game' ? '#FFFFFF' : palette.subtext }]}>Juegos</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {!hasQuery ? (
+        <View style={styles.centered}>
+          <Text style={[styles.helperText, { color: palette.text }]}>Escribe para buscar todo el catálogo.</Text>
+          <Text style={[styles.helperSubtext, { color: palette.subtext }]}>Si marcas un tipo arriba, filtramos solo por ese tipo.</Text>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
+          {isLoading && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color="#0E7490" />
+              <Text style={[styles.loadingText, { color: palette.text }]}>Buscando...</Text>
+            </View>
+          )}
+
+          {selectedType === 'game' && isWeb && hasQuery && (
+            <Text style={styles.webWarning}>
+              En web no consultamos videojuegos por limitación CORS de IGDB.
+            </Text>
+          )}
+
+          {mixedResults.map((item) => (
+            <TouchableOpacity
+              key={`${item.mediaType}-${item.id}`}
+              style={[styles.item, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}
+              activeOpacity={0.75}
+              onPress={() => router.push(mediaRoute(item))}
+            >
+              <Image
+                source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
+                style={styles.poster}
+                resizeMode="cover"
+              />
+              <View style={styles.itemTextWrap}>
+                <Text style={[styles.itemTitle, { color: palette.text }]}>{item.title}</Text>
+                <View style={styles.metaRow}>
+                  <View style={styles.typeBadge}>
+                    <MaterialIcons name={mediaIcon(item.mediaType)} size={12} color="#0E7490" />
+                  </View>
+                  <Text style={[styles.itemMeta, { color: palette.subtext }]}> 
+                    {item.rating ? `★ ${item.rating.toFixed(1)}` : 'Sin rating'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+
+          {noResults && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No encontramos resultados</Text>
+              <Text style={styles.emptySubtitle}>Prueba con otra palabra o quitando el filtro.</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
+    fontWeight: '800',
+    marginBottom: 12,
   },
-  subtitle: {
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingRight: 40,
     fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
+  },
+  inputWrap: {
+    position: 'relative',
+  },
+  filtersRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#0E7490',
+    borderColor: '#0E7490',
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E2E8F0',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  helperText: {
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
   },
-  message: {
+  helperSubtext: {
+    marginTop: 8,
     fontSize: 14,
-    marginBottom: 20,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
-  instruction: {
-    fontSize: 12,
-    lineHeight: 20,
-    textAlign: 'left',
-    backgroundColor: '#f0f0f0',
-    padding: 15,
+  content: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  poster: {
+    width: 58,
+    height: 82,
     borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  itemTextWrap: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  metaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  typeBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFEFF',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+  },
+  itemMeta: {
+    fontSize: 12,
+  },
+  webWarning: {
+    fontSize: 13,
+    color: '#991B1B',
+    marginBottom: 8,
+  },
+  emptyState: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#312E81',
+  },
+  emptySubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#4338CA',
   },
 });
 
