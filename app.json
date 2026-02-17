@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "flicksy-mobile",
-    "slug": "flicksy-mobile",
+    "name": "Flicksy",
+    "slug": "flicksy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "flicksymobile",
+    "scheme": "flicksy",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
