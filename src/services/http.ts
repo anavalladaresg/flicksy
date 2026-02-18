@@ -11,7 +11,10 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 const IGDB_CLIENT_ID = process.env.EXPO_PUBLIC_IGDB_CLIENT_ID || '';
 const IGDB_ACCESS_TOKEN = process.env.EXPO_PUBLIC_IGDB_ACCESS_TOKEN || '';
-const IGDB_BASE_URL = 'https://api.igdb.com/v4';
+const isWebRuntime = typeof window !== 'undefined';
+const IGDB_WEB_PROXY_URL =
+  (process.env.EXPO_PUBLIC_IGDB_PROXY_URL || '/api/igdb').replace(/\/$/, '');
+const IGDB_BASE_URL = isWebRuntime ? IGDB_WEB_PROXY_URL : 'https://api.igdb.com/v4';
 
 // ============= TMDB HTTP CLIENT =============
 export const tmdbHttp: AxiosInstance = axios.create({
@@ -38,12 +41,15 @@ tmdbHttp.interceptors.request.use((config) => {
 });
 
 igdbHttp.interceptors.request.use((config) => {
-  config.headers = {
-    ...config.headers,
-    'Client-ID': IGDB_CLIENT_ID,
-    Authorization: `Bearer ${IGDB_ACCESS_TOKEN}`,
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-  };
+  // Web calls go through the Vercel proxy, which injects IGDB credentials server-side.
+  if (!isWebRuntime) {
+    config.headers = {
+      ...config.headers,
+      'Client-ID': IGDB_CLIENT_ID,
+      Authorization: `Bearer ${IGDB_ACCESS_TOKEN}`,
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    };
+  }
   return config;
 });
 

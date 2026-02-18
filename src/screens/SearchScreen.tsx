@@ -30,6 +30,7 @@ type MixedResult = {
   title: string;
   imageUrl: string | null;
   rating: number | null;
+  popularity: number;
 };
 
 function stripDiacritics(value: string): string {
@@ -93,7 +94,7 @@ function SearchScreen() {
 
   const moviesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'movie');
   const tvEnabled = hasQuery && (selectedType === 'all' || selectedType === 'tv');
-  const gamesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'game') && !isWeb;
+  const gamesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'game');
 
   const useAccentlessMovies = moviesEnabled && accentlessQuery !== primaryQuery;
   const useAccentlessTV = tvEnabled && accentlessQuery !== primaryQuery;
@@ -146,6 +147,7 @@ function SearchScreen() {
         title: movie.title,
         imageUrl: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
         rating: movie.vote_average,
+        popularity: (movie as any).vote_count ?? 0,
       })),
       ...tvShows.map((show) => ({
         id: show.id,
@@ -153,6 +155,7 @@ function SearchScreen() {
         title: show.name,
         imageUrl: show.poster_path ? `${TMDB_IMAGE_BASE_URL}${show.poster_path}` : null,
         rating: show.vote_average,
+        popularity: (show as any).vote_count ?? 0,
       })),
       ...games.map((game) => ({
         id: game.id,
@@ -160,10 +163,12 @@ function SearchScreen() {
         title: game.name,
         imageUrl: toGameImageUrl(game),
         rating: game.rating ? game.rating / 10 : null,
+        popularity: (game as any).rating_count ?? 0,
       })),
     ];
 
     return mixed.sort((a, b) => {
+      if (b.popularity !== a.popularity) return b.popularity - a.popularity;
       const rb = b.rating ?? -1;
       const ra = a.rating ?? -1;
       if (rb !== ra) return rb - ra;
@@ -208,7 +213,7 @@ function SearchScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}> 
-      <View style={[styles.header, { backgroundColor: palette.background }]}> 
+      <View style={[styles.header, { backgroundColor: palette.background }, isWeb && styles.headerWeb]}> 
         <Text style={[styles.title, { color: palette.text }]}>Buscar</Text>
         <View style={styles.inputWrap}>
           <TextInput
@@ -298,7 +303,7 @@ function SearchScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
@@ -307,12 +312,6 @@ function SearchScreen() {
               <ActivityIndicator size="small" color="#0E7490" />
               <Text style={[styles.loadingText, { color: palette.text }]}>Buscando...</Text>
             </View>
-          )}
-
-          {selectedType === 'game' && isWeb && hasQuery && (
-            <Text style={styles.webWarning}>
-              En web no consultamos videojuegos por limitación CORS de IGDB.
-            </Text>
           )}
 
           {mixedResults.map((item) => (
@@ -361,6 +360,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
+  },
+  headerWeb: {
+    width: '100%',
+    maxWidth: 1160,
+    alignSelf: 'center',
   },
   title: {
     fontSize: 28,
@@ -430,6 +434,11 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  contentWeb: {
+    width: '100%',
+    maxWidth: 1160,
+    alignSelf: 'center',
   },
   loadingRow: {
     flexDirection: 'row',

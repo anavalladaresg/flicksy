@@ -7,6 +7,9 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 interface PreferencesState {
   username: string;
   themeMode: ThemeMode;
+  alertsAchievements: boolean;
+  alertsFriendRequests: boolean;
+  alertsFriendsActivity: boolean;
   alertsNewSeason: boolean;
   alertsUpcomingRelease: boolean;
   dismissedRecommendationKeys: string[];
@@ -15,6 +18,9 @@ interface PreferencesState {
   seenAchievementIds: string[];
   setUsername: (username: string) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setAlertsAchievements: (enabled: boolean) => void;
+  setAlertsFriendRequests: (enabled: boolean) => void;
+  setAlertsFriendsActivity: (enabled: boolean) => void;
   setAlertsNewSeason: (enabled: boolean) => void;
   setAlertsUpcomingRelease: (enabled: boolean) => void;
   dismissRecommendation: (key: string) => void;
@@ -29,6 +35,9 @@ export const usePreferencesStore = create<PreferencesState>()(
     (set) => ({
       username: 'anavalladares',
       themeMode: 'system',
+      alertsAchievements: true,
+      alertsFriendRequests: true,
+      alertsFriendsActivity: true,
       alertsNewSeason: true,
       alertsUpcomingRelease: true,
       dismissedRecommendationKeys: [],
@@ -37,6 +46,9 @@ export const usePreferencesStore = create<PreferencesState>()(
       seenAchievementIds: [],
       setUsername: (username) => set({ username }),
       setThemeMode: (themeMode) => set({ themeMode }),
+      setAlertsAchievements: (alertsAchievements) => set({ alertsAchievements }),
+      setAlertsFriendRequests: (alertsFriendRequests) => set({ alertsFriendRequests }),
+      setAlertsFriendsActivity: (alertsFriendsActivity) => set({ alertsFriendsActivity }),
       setAlertsNewSeason: (alertsNewSeason) => set({ alertsNewSeason }),
       setAlertsUpcomingRelease: (alertsUpcomingRelease) => set({ alertsUpcomingRelease }),
       dismissRecommendation: (key) =>

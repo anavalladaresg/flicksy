@@ -112,7 +112,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const gameCoverUrl = game?.cover?.image_id
     ? `https://images.igdb.com/igdb/image/upload/t_1080p/${game.cover.image_id}.jpg`
     : game?.cover?.url
-      ? `https:${game.cover.url}`.replace('/t_thumb/', '/t_cover_big_2x/')
+      ? `https:${game.cover.url}`.replace('/t_thumb/', '/t_1080p/')
       : null;
 
   const handleConfirmAdd = () => {

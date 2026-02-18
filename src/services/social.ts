@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { sendExpoPushNotification } from './notifications';
 import type { TrackedItem } from '../types';
+import { getClerkInstance } from '@clerk/clerk-expo';
 
 export interface FriendProfile {
   id: string;
@@ -37,11 +38,12 @@ export interface FriendItemRating {
 }
 
 async function getCurrentUserId(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData.session?.user?.id) return sessionData.session.user.id;
-  const { data: userData } = await supabase.auth.getUser();
-  return userData.user?.id ?? null;
+  const clerk = getClerkInstance();
+  const userId = clerk.user?.id ?? null;
+  if (!userId) {
+    console.warn('[social-debug] getCurrentUserId: missing Clerk user id');
+  }
+  return userId;
 }
 
 function normalizeUsername(input: string): string {
@@ -86,6 +88,7 @@ export async function syncOwnProfile(username: string): Promise<void> {
   if (!userId) return;
   const normalized = normalizeUsername(username);
   if (!normalized) return;
+  console.log('[social-debug] syncOwnProfile:start', { userId, username: normalized });
   const { error } = await supabase.from('profiles').upsert(
     {
       id: userId,
@@ -97,6 +100,8 @@ export async function syncOwnProfile(username: string): Promise<void> {
   );
   if (error) {
     console.warn('[social] syncOwnProfile failed:', error.message);
+  } else {
+    console.log('[social-debug] syncOwnProfile:ok', { userId });
   }
 }
 
@@ -164,11 +169,11 @@ export async function sendFriendRequestByUserId(toUserId: string): Promise<{ ok:
   if (!fromUserId) return { ok: false, message: 'Sesión no disponible.' };
   if (fromUserId === toUserId) return { ok: false, message: 'No puedes enviarte solicitud.' };
 
-  const { data: authUserData } = await supabase.auth.getUser();
+  const clerk = getClerkInstance();
   const senderDraftName =
-    (authUserData.user?.user_metadata?.display_name as string | undefined) ||
-    (authUserData.user?.user_metadata?.username as string | undefined) ||
-    authUserData.user?.email?.split('@')[0] ||
+    clerk.user?.username ||
+    clerk.user?.firstName ||
+    clerk.user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] ||
     'Usuario';
   await syncOwnProfile(senderDraftName);
 

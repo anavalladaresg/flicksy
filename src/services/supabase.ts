@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import { getClerkInstance } from '@clerk/clerk-expo';
 import { Platform } from 'react-native';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -27,6 +28,10 @@ const authOptions =
 
 export const supabase = isSupabaseConfigured
   ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: authOptions,
-    })
+    auth: authOptions,
+    accessToken: async () => {
+      const clerk = getClerkInstance();
+      return (await clerk.session?.getToken()) ?? null;
+    },
+  })
   : null;

@@ -1,53 +1,60 @@
-import { useEffect, useState } from 'react';
+import { useAuth, useUser } from '@clerk/clerk-expo';
+import { useEffect, useRef } from 'react';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 
-function isRealSignedSession(session: { user?: { email?: string | null; is_anonymous?: boolean | null } } | null): boolean {
-  if (!session?.user) return false;
-  if (session.user.is_anonymous) return false;
-  return Boolean(session.user.email);
-}
-
 export function useAuthStatus() {
-  const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
-  const [isSignedIn, setIsSignedIn] = useState(!isSupabaseConfigured);
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { user } = useUser();
+  const lastSyncedUserRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!supabase || !isSupabaseConfigured) {
-      setIsSignedIn(true);
-      setIsLoading(false);
+    if (!supabase || !isSupabaseConfigured || !isLoaded) return;
+
+    if (!isSignedIn) {
+      lastSyncedUserRef.current = null;
       return;
     }
 
-    let mounted = true;
-    supabase.auth
-      .getSession()
-      .then(async ({ data }) => {
-        if (!mounted) return;
-        const signedIn = isRealSignedSession(data.session as any);
-        if (!signedIn && data.session?.user?.is_anonymous) {
-          await supabase.auth.signOut();
+    if (!userId || lastSyncedUserRef.current === userId) return;
+
+    void (async () => {
+      try {
+        if (!userId) {
+          console.warn('[auth] Missing Clerk user id.');
+          return;
         }
-        setIsSignedIn(signedIn);
-        setIsLoading(false);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setIsSignedIn(false);
-        setIsLoading(false);
-      });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      const signedIn = isRealSignedSession(session as any);
-      setIsSignedIn(signedIn);
-      setIsLoading(false);
-    });
+        const preferredName =
+          user?.username ||
+          user?.firstName ||
+          user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] ||
+          'usuario';
+        console.log('[auth-debug] profile-sync:start', {
+          userId,
+          preferredName,
+          isSignedIn,
+        });
+        const { error } = await supabase.from('profiles').upsert(
+          {
+            id: userId,
+            username: preferredName.toLowerCase().trim(),
+            display_name: preferredName.trim(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+        if (error) {
+          console.warn('[auth] profiles upsert failed:', error.message);
+          console.warn('[auth-debug] profile-sync:error-detail', error);
+        } else {
+          console.log('[auth-debug] profile-sync:ok', { userId });
+        }
+        lastSyncedUserRef.current = userId;
+      } catch (error) {
+        console.warn('[auth] Clerk -> Supabase profile sync failed:', error);
+      }
+    })();
+  }, [isLoaded, isSignedIn, user, userId]);
 
-    return () => {
-      mounted = false;
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  return { isLoading, isSignedIn };
+  return { isLoading: !isLoaded, isSignedIn: Boolean(isSignedIn) };
 }
-

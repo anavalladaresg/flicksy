@@ -1,6 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
+import { useAuth } from '@clerk/clerk-expo';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -12,13 +13,16 @@ import { getPendingFriendRequestsCount } from '@/src/services/social';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const isWeb = Platform.OS === 'web';
   const { isLoading, isSignedIn } = useAuthStatus();
+  const { userId } = useAuth();
   const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
-    if (!isSignedIn || !supabase) return;
+    const sb = supabase;
+    if (!isSignedIn || !sb) return;
     let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: ReturnType<typeof sb.channel> | null = null;
 
     const refreshPending = async () => {
       const count = await getPendingFriendRequestsCount();
@@ -28,26 +32,22 @@ export default function TabLayout() {
     void refreshPending();
     const interval = setInterval(() => void refreshPending(), 15000);
 
-    void (async () => {
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!userId) return;
-      channel = supabase
-        .channel(`friend_requests_badge_${userId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${userId}` },
-          () => void refreshPending()
-        )
-        .subscribe();
-    })();
+    if (!userId) return;
+    channel = sb
+      .channel(`friend_requests_badge_${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'friend_requests', filter: `to_user_id=eq.${userId}` },
+        () => void refreshPending()
+      )
+      .subscribe();
 
     return () => {
       mounted = false;
       clearInterval(interval);
-      if (channel) supabase.removeChannel(channel);
+      if (channel) sb.removeChannel(channel);
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, userId]);
 
   if (isLoading) {
     return (
@@ -66,7 +66,18 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarButton: isWeb ? undefined : HapticTab,
+        tabBarPosition: isWeb ? 'top' : 'bottom',
+        tabBarStyle: isWeb
+          ? {
+              height: 56,
+              borderBottomWidth: 1,
+              borderTopWidth: 0,
+              borderBottomColor: colorScheme === 'dark' ? '#1F2937' : '#E2E8F0',
+              backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#FFFFFF',
+              paddingTop: 4,
+            }
+          : undefined,
       }}>
       <Tabs.Screen
         name="index"
