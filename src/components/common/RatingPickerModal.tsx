@@ -74,17 +74,27 @@ function RatingPickerModal({
     onChange(next);
   }, [onChange, starsWidth]);
 
+  const ratingFromTouchX = useCallback((locationX: number) => {
+    if (starsWidth <= 0) return valueRef.current || 0;
+    const boundedX = Math.max(0, Math.min(starsWidth, locationX));
+    const pointsPerStep = starsWidth / 20;
+    const steps = Math.round(boundedX / pointsPerStep);
+    return Math.max(0, Math.min(10, steps * 0.5));
+  }, [starsWidth]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          startValueRef.current = valueRef.current || 0;
+        onPanResponderGrant: (event) => {
+          const tappedValue = ratingFromTouchX(event.nativeEvent.locationX);
+          startValueRef.current = tappedValue;
+          onChange(tappedValue);
         },
         onPanResponderMove: (_, gestureState) => setRatingFromDelta(gestureState.dx),
       }),
-    [setRatingFromDelta]
+    [onChange, ratingFromTouchX, setRatingFromDelta]
   );
 
   const hasInvalidRange =

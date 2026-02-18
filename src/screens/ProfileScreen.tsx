@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
 import { tvRepository } from '../features/tv/data/repositories';
+import { isSupabaseConfigured, supabase } from '../services/supabase';
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
@@ -246,6 +247,11 @@ function ProfileScreen() {
           <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
           <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>Usuario</Text>
           <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{username}</Text>
+          {isSupabaseConfigured ? (
+            <TouchableOpacity style={styles.logoutButton} onPress={() => void supabase?.auth.signOut()}>
+              <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark]}>
@@ -425,6 +431,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#0F172A',
     fontWeight: '700',
+  },
+  logoutButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  logoutButtonText: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '800',
   },
   row: {
     flexDirection: 'row',

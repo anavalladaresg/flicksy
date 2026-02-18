@@ -6,6 +6,7 @@ import {
   Image,
   Modal,
   PanResponder,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -117,17 +118,27 @@ function RatingEditor({
     onChange(next);
   }, [onChange, starsWidth]);
 
+  const ratingFromTouchX = useCallback((locationX: number) => {
+    if (starsWidth <= 0) return valueRef.current || 0;
+    const boundedX = Math.max(0, Math.min(starsWidth, locationX));
+    const pointsPerStep = starsWidth / 20;
+    const steps = Math.round(boundedX / pointsPerStep);
+    return Math.max(0, Math.min(10, steps * 0.5));
+  }, [starsWidth]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          startValueRef.current = valueRef.current || 0;
+        onPanResponderGrant: (event) => {
+          const tappedValue = ratingFromTouchX(event.nativeEvent.locationX);
+          startValueRef.current = tappedValue;
+          onChange(tappedValue);
         },
         onPanResponderMove: (_, gestureState) => setRatingFromDelta(gestureState.dx),
       }),
-    [setRatingFromDelta]
+    [onChange, ratingFromTouchX, setRatingFromDelta]
   );
 
   return (
@@ -152,6 +163,7 @@ function RatingEditor({
 
 function TrackedScreen() {
   const isDark = useColorScheme() === 'dark';
+  const isWeb = Platform.OS === 'web';
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
@@ -343,22 +355,8 @@ function TrackedScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.list}>
-            {filtered.map((item) => (
-              <Swipeable
-                key={item.id}
-                overshootRight={false}
-                overshootLeft={false}
-                renderLeftActions={() => (
-                  <TouchableOpacity style={styles.swipeEdit} onPress={() => openEditor(item)}>
-                    <MaterialIcons name="edit" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
-                renderRightActions={() => (
-                  <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem(item.id)}>
-                    <MaterialIcons name="delete" size={22} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
-              >
+            {filtered.map((item) => {
+              const cardContent = (
                 <TouchableOpacity style={[styles.card, isDark && styles.cardDark]} activeOpacity={0.8} onPress={() => router.push(routeFromItem(item))}>
                   <Image source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
 
@@ -378,8 +376,46 @@ function TrackedScreen() {
                     <Text numberOfLines={1} style={[styles.dateSummary, { color: isDark ? '#94A3B8' : '#64748B' }]}>{renderDateSummary(item)}</Text>
                   </View>
                 </TouchableOpacity>
-              </Swipeable>
-            ))}
+              );
+
+              if (isWeb) {
+                return (
+                  <View key={item.id}>
+                    {cardContent}
+                    <View style={styles.webActionsRow}>
+                      <TouchableOpacity style={[styles.webActionBtn, styles.webActionEdit]} onPress={() => openEditor(item)}>
+                        <MaterialIcons name="edit" size={16} color="#FFFFFF" />
+                        <Text style={styles.webActionText}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.webActionBtn, styles.webActionDelete]} onPress={() => removeItem(item.id)}>
+                        <MaterialIcons name="delete" size={16} color="#FFFFFF" />
+                        <Text style={styles.webActionText}>Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <Swipeable
+                  key={item.id}
+                  overshootRight={false}
+                  overshootLeft={false}
+                  renderLeftActions={() => (
+                    <TouchableOpacity style={styles.swipeEdit} onPress={() => openEditor(item)}>
+                      <MaterialIcons name="edit" size={20} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  )}
+                  renderRightActions={() => (
+                    <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem(item.id)}>
+                      <MaterialIcons name="delete" size={22} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  )}
+                >
+                  {cardContent}
+                </Swipeable>
+              );
+            })}
           </ScrollView>
         )}
 
@@ -640,6 +676,32 @@ const styles = StyleSheet.create({
     width: 80,
     marginBottom: 10,
     borderRadius: 14,
+  },
+  webActionsRow: {
+    marginTop: -4,
+    marginBottom: 12,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  webActionBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  webActionEdit: {
+    backgroundColor: '#0E7490',
+  },
+  webActionDelete: {
+    backgroundColor: '#DC2626',
+  },
+  webActionText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   poster: {
     width: 70,
