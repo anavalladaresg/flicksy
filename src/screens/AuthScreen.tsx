@@ -12,6 +12,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
+import { syncOwnProfile } from '../services/social';
 import { usePreferencesStore } from '../store/preferences';
 
 type AuthMode = 'login' | 'register';
@@ -21,7 +22,7 @@ function AuthScreen() {
   const setUsername = usePreferencesStore((state) => state.setUsername);
   const [mode, setMode] = useState<AuthMode>('login');
   const [username, setUsernameInput] = useState('');
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +35,7 @@ function AuthScreen() {
       setError('Supabase no está configurado.');
       return;
     }
-    if (!email.trim() || !password.trim()) {
+    if (!emailOrUsername.trim() || !password.trim()) {
       setError('Completa email y contraseña.');
       return;
     }
@@ -47,7 +48,7 @@ function AuthScreen() {
     try {
       if (mode === 'login') {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: emailOrUsername.trim(),
           password,
         });
         if (signInError) {
@@ -60,9 +61,10 @@ function AuthScreen() {
           data.user?.email?.split('@')[0] ||
           'Usuario';
         setUsername(remoteUsername);
+        await syncOwnProfile(remoteUsername);
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: emailOrUsername.trim(),
           password,
           options: {
             data: {
@@ -76,6 +78,9 @@ function AuthScreen() {
           return;
         }
         setUsername(username.trim());
+        if (data.session) {
+          await syncOwnProfile(username.trim());
+        }
         if (!data.session) {
           setInfo('Cuenta creada. Revisa tu email para confirmar el acceso.');
         }
@@ -118,8 +123,8 @@ function AuthScreen() {
           ) : null}
 
           <TextInput
-            value={email}
-            onChangeText={setEmail}
+            value={emailOrUsername}
+            onChangeText={setEmailOrUsername}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"

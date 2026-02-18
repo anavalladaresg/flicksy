@@ -266,14 +266,16 @@ export const useTrackingStore = create<TrackingState>()(
           .from('library_items')
           .select(
             'id,media_type,external_id,title,poster_path,status,rating,watched_at,started_at,finished_at,created_at,release_year,genres,platforms,estimated_hours,runtime_minutes,seasons_at_add'
-          );
+          )
+          .eq('user_id', userId);
 
         let remoteRows = (fullQuery.data ?? []) as RemoteTrackedRow[];
         if (fullQuery.error) {
           if (fullQuery.error.code === '42703') {
             const minimalQuery = await supabase
               .from('library_items')
-              .select('id,media_type,external_id,title,poster_path,status,rating,watched_at,started_at,finished_at,created_at');
+              .select('id,media_type,external_id,title,poster_path,status,rating,watched_at,started_at,finished_at,created_at')
+              .eq('user_id', userId);
             if (minimalQuery.error) {
               console.warn('[tracking] Remote bootstrap failed:', minimalQuery.error.message);
               return;

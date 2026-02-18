@@ -3,7 +3,7 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
@@ -18,7 +18,9 @@ import {
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { useGameDetails } from '../features/games/presentation/hooks';
+import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
+import type { TrackedItem } from '../types';
 
 interface GameDetailsScreenProps {
   route: any;
@@ -30,7 +32,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   navigation,
 }) => {
   const isDark = useColorScheme() === 'dark';
-  const { gameId } = route.params;
+  const { gameId, fromFriendId, fromFriendName } = route.params;
   const { data: game, isLoading, isError, refetch } = useGameDetails(gameId);
   const addTrackedItem = useTrackingStore((state) => state.addItem);
   const updateTrackedItem = useTrackingStore((state) => state.updateItem);
@@ -41,6 +43,8 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const [status, setStatus] = useState<'planned' | 'playing' | 'completed'>('playing');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
+  const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
+  const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
   const isTracked = trackedItems.some(
     (item) => item.externalId === gameId && item.mediaType === 'game'
@@ -48,6 +52,35 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const trackedGameItem = trackedItems.find(
     (item) => item.externalId === gameId && item.mediaType === 'game'
   );
+  const visibleFriendsRatings = fromFriendId
+    ? friendsRatings.filter((entry) => entry.friendId !== fromFriendId)
+    : friendsRatings;
+
+  useEffect(() => {
+    if (!fromFriendId || !gameId) {
+      setFriendTrackedItem(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const item = await getFriendLibraryItem(fromFriendId, 'game', gameId);
+      if (!cancelled) setFriendTrackedItem(item);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromFriendId, gameId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ratings = await getFriendsRatingsForItem('game', gameId);
+      if (!cancelled) setFriendsRatings(ratings);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
 
   function statusLabel(value: 'planned' | 'playing' | 'completed') {
     if (value === 'planned') return 'Pendiente';
@@ -248,6 +281,22 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
               </Text>
             </View>
           )}
+          {!trackedGameItem && friendTrackedItem && (
+            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
+              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
+                {fromFriendName || 'Tu amigo/a'} ha puntuado este juego con{' '}
+                {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
+              </Text>
+            </View>
+          )}
+          {visibleFriendsRatings.length > 0 && (
+            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
+              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
+                {visibleFriendsRatings[0].friendName} ha puntuado este juego con {visibleFriendsRatings[0].rating.toFixed(1)} ⭐️
+                {visibleFriendsRatings.length > 1 ? ` · +${visibleFriendsRatings.length - 1} amigo(s)` : ''}.
+              </Text>
+            </View>
+          )}
 
           <View style={styles.info}>
             {game.rating && (
@@ -408,6 +457,25 @@ const styles = StyleSheet.create({
   myDataCardDark: {
     backgroundColor: '#111827',
     borderColor: '#334155',
+  },
+  friendDataCard: {
+    marginTop: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  friendDataCardDark: {
+    backgroundColor: '#1F2937',
+    borderColor: '#92400E',
+  },
+  friendDataText: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   editDataButton: {
     position: 'absolute',

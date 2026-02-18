@@ -100,7 +100,8 @@ function RatingEditor({
   onChange: (next: number) => void;
 }) {
   const [starsWidth, setStarsWidth] = useState(0);
-  const startValueRef = useRef(value);
+  const starsTrackRef = useRef<View | null>(null);
+  const trackPageXRef = useRef(0);
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -110,17 +111,16 @@ function RatingEditor({
     return 'star-border';
   }
 
-  const setRatingFromDelta = useCallback((dx: number) => {
-    if (starsWidth <= 0) return;
-    const pointsPerStep = starsWidth / 20;
-    const steps = Math.round(dx / pointsPerStep);
-    const next = Math.max(0, Math.min(10, startValueRef.current + steps * 0.5));
-    onChange(next);
-  }, [onChange, starsWidth]);
+  const measureTrack = useCallback(() => {
+    starsTrackRef.current?.measureInWindow((x) => {
+      trackPageXRef.current = x;
+    });
+  }, []);
 
-  const ratingFromTouchX = useCallback((locationX: number) => {
+  const ratingFromTouchX = useCallback((pageX: number) => {
     if (starsWidth <= 0) return valueRef.current || 0;
-    const boundedX = Math.max(0, Math.min(starsWidth, locationX));
+    const localX = pageX - trackPageXRef.current;
+    const boundedX = Math.max(0, Math.min(starsWidth, localX));
     const pointsPerStep = starsWidth / 20;
     const steps = Math.round(boundedX / pointsPerStep);
     return Math.max(0, Math.min(10, steps * 0.5));
@@ -132,13 +132,12 @@ function RatingEditor({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (event) => {
-          const tappedValue = ratingFromTouchX(event.nativeEvent.locationX);
-          startValueRef.current = tappedValue;
+          const tappedValue = ratingFromTouchX(event.nativeEvent.pageX);
           onChange(tappedValue);
         },
-        onPanResponderMove: (_, gestureState) => setRatingFromDelta(gestureState.dx),
+        onPanResponderMove: (_, gestureState) => onChange(ratingFromTouchX(gestureState.moveX)),
       }),
-    [onChange, ratingFromTouchX, setRatingFromDelta]
+    [onChange, ratingFromTouchX]
   );
 
   return (
@@ -146,8 +145,12 @@ function RatingEditor({
       <Text style={styles.modalLabel}>Puntuación personal ({value.toFixed(1)} / 10)</Text>
       <View style={styles.modalStarsRow}>
         <View
+          ref={starsTrackRef}
           style={styles.starsTrack}
-          onLayout={(event) => setStarsWidth(event.nativeEvent.layout.width)}
+          onLayout={(event) => {
+            setStarsWidth(event.nativeEvent.layout.width);
+            measureTrack();
+          }}
           {...panResponder.panHandlers}
         >
           {Array.from({ length: 10 }, (_, idx) => idx + 1).map((index) => (
@@ -166,7 +169,7 @@ function TrackedScreen() {
   const isWeb = Platform.OS === 'web';
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('recent');
+  const [sortBy, setSortBy] = useState<SortBy>('status');
   const [isSortOpen, setIsSortOpen] = useState(false);
 
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
@@ -224,9 +227,9 @@ function TrackedScreen() {
     const base = filter === 'all' ? items : items.filter((item) => item.mediaType === filter);
     const copied = [...base];
     const statusOrder: Record<TrackedItem['status'], number> = {
-      planned: 0,
-      watching: 1,
-      playing: 1,
+      watching: 0,
+      playing: 0,
+      planned: 1,
       completed: 2,
       dropped: 3,
     };
@@ -355,7 +358,9 @@ function TrackedScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.list}>
-            {filtered.map((item) => {
+            {filtered.map((item, index) => {
+              const previous = filtered[index - 1];
+              const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
               const cardContent = (
                 <TouchableOpacity style={[styles.card, isDark && styles.cardDark]} activeOpacity={0.8} onPress={() => router.push(routeFromItem(item))}>
                   <Image source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
@@ -381,6 +386,7 @@ function TrackedScreen() {
               if (isWeb) {
                 return (
                   <View key={item.id}>
+                    {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
                     {cardContent}
                     <View style={styles.webActionsRow}>
                       <TouchableOpacity style={[styles.webActionBtn, styles.webActionEdit]} onPress={() => openEditor(item)}>
@@ -397,23 +403,25 @@ function TrackedScreen() {
               }
 
               return (
-                <Swipeable
-                  key={item.id}
-                  overshootRight={false}
-                  overshootLeft={false}
-                  renderLeftActions={() => (
-                    <TouchableOpacity style={styles.swipeEdit} onPress={() => openEditor(item)}>
-                      <MaterialIcons name="edit" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  )}
-                  renderRightActions={() => (
-                    <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem(item.id)}>
-                      <MaterialIcons name="delete" size={22} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  )}
-                >
-                  {cardContent}
-                </Swipeable>
+                <View key={item.id}>
+                  {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
+                  <Swipeable
+                    overshootRight={false}
+                    overshootLeft={false}
+                    renderLeftActions={() => (
+                      <TouchableOpacity style={styles.swipeEdit} onPress={() => openEditor(item)}>
+                        <MaterialIcons name="edit" size={20} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
+                    renderRightActions={() => (
+                      <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem(item.id)}>
+                        <MaterialIcons name="delete" size={22} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
+                  >
+                    {cardContent}
+                  </Swipeable>
+                </View>
               );
             })}
           </ScrollView>
@@ -647,6 +655,15 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  statusSeparator: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  statusSeparatorDark: {
+    backgroundColor: '#334155',
   },
   card: {
     flexDirection: 'row',

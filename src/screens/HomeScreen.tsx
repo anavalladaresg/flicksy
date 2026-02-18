@@ -18,6 +18,7 @@ import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useGamesBySort } from '../features/games/presentation/hooks';
 import { useMoviesBySort } from '../features/movies/presentation/hooks';
 import { useTVShowsBySort } from '../features/tv/presentation/hooks';
+import { getFriendsActivity, type FriendActivityItem } from '../services/social';
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { Game, MediaType, Movie, TVShow, TrackedItem } from '../types';
@@ -157,6 +158,48 @@ function statusBoost(status: TrackedItem['status']): number {
   return 0;
 }
 
+function FriendsActivityRow({
+  items,
+  dark,
+}: {
+  items: FriendActivityItem[];
+  dark: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <View style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>Lo que hacen tus amigos</Text>
+      </View>
+      {items.length === 0 ? (
+        <Text style={[styles.friendEmptyText, { color: dark ? '#94A3B8' : '#64748B' }]}>
+          Añade amigas/os en Perfil para ver su actividad aquí.
+        </Text>
+      ) : (
+        <FlatList
+          horizontal
+          data={items}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.friendCard, dark && styles.friendCardDark]}
+              activeOpacity={0.8}
+              onPress={() => router.push(`/${item.mediaType}/${item.externalId}` as any)}
+            >
+              <Text numberOfLines={1} style={[styles.friendName, { color: dark ? '#93C5FD' : '#0E7490' }]}>{item.friendName}</Text>
+              <Text numberOfLines={2} style={[styles.friendTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>{item.title}</Text>
+              <Text numberOfLines={1} style={[styles.friendMeta, { color: dark ? '#94A3B8' : '#64748B' }]}>{new Date(item.activityDate).toLocaleDateString('es-ES')}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
 function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -165,6 +208,7 @@ function HomeScreen() {
   const dismissedRecommendationKeys = usePreferencesStore((state) => state.dismissedRecommendationKeys);
   const dismissRecommendation = usePreferencesStore((state) => state.dismissRecommendation);
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [friendsActivity, setFriendsActivity] = useState<FriendActivityItem[]>([]);
   const moviesQuery = useMoviesBySort('vote_count.desc', 1);
   const tvQuery = useTVShowsBySort('vote_count.desc', 1);
   const gamesQuery = useGamesBySort('rating_count.desc', 1, !isWeb);
@@ -280,6 +324,17 @@ function HomeScreen() {
     return () => clearTimeout(timer);
   }, [feedbackMessage]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const feed = await getFriendsActivity(10);
+      if (!cancelled) setFriendsActivity(feed);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trackedItems.length]);
+
   function handleDismissRecommendation(item: RecommendationItem) {
     dismissRecommendation(`${item.mediaType}-${item.id}`);
     setFeedbackMessage(`No recomendaremos "${item.name}" de nuevo.`);
@@ -311,11 +366,9 @@ function HomeScreen() {
           <View style={styles.heroGlowB} />
           <Text style={[styles.heroTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Flicksy</Text>
           <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Lo más popular del catálogo mundial</Text>
-          <View style={styles.heroBadges}>
-            <View style={styles.heroBadge}><MaterialIcons name="movie" size={12} color="#0E7490" /><Text style={styles.heroBadgeText}>Pelis</Text></View>
-            <View style={styles.heroBadge}><MaterialIcons name="tv" size={12} color="#0E7490" /><Text style={styles.heroBadgeText}>Series</Text></View>
-            <View style={styles.heroBadge}><MaterialIcons name="sports-esports" size={12} color="#0E7490" /><Text style={styles.heroBadgeText}>Juegos</Text></View>
-          </View>
+          <Text style={[styles.heroHint, { color: isDark ? '#93C5FD' : '#0369A1' }]}>
+            Recomendaciones personalizadas + tendencias globales
+          </Text>
         </View>
 
         <View style={styles.sectionLabelRow}>
@@ -323,11 +376,12 @@ function HomeScreen() {
           <Text style={[styles.sectionLabelText, { color: isDark ? '#CBD5E1' : '#334155' }]}>Para ti</Text>
         </View>
         <PersonalizedRow
-          title="Recomendaciones seguras"
+          title="Recomendaciones"
           items={personalized.safe}
           dark={isDark}
           onDismiss={handleDismissRecommendation}
         />
+        <FriendsActivityRow items={friendsActivity} dark={isDark} />
         <PersonalizedRow
           title="Descubrimiento"
           items={personalized.discovery}
@@ -431,26 +485,10 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '600',
   },
-  heroBadges: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  heroBadgeText: {
-    fontSize: 11,
+  heroHint: {
+    marginTop: 10,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#0E7490',
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -514,6 +552,40 @@ const styles = StyleSheet.create({
     width: 140,
     marginHorizontal: 4,
     position: 'relative',
+  },
+  friendCard: {
+    width: 180,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+    marginHorizontal: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  friendCardDark: {
+    backgroundColor: '#0B1220',
+    borderColor: '#1F2937',
+  },
+  friendName: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  friendTitle: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    minHeight: 32,
+  },
+  friendMeta: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  friendEmptyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   poster: {
     width: 140,

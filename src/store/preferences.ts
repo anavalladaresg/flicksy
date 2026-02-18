@@ -12,6 +12,7 @@ interface PreferencesState {
   dismissedRecommendationKeys: string[];
   monthlyMovieGoal: number;
   monthlyGameGoal: number;
+  seenAchievementIds: string[];
   setUsername: (username: string) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setAlertsNewSeason: (enabled: boolean) => void;
@@ -20,6 +21,7 @@ interface PreferencesState {
   restoreRecommendation: (key: string) => void;
   setMonthlyMovieGoal: (count: number) => void;
   setMonthlyGameGoal: (count: number) => void;
+  markAchievementSeen: (id: string) => void;
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -32,6 +34,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       dismissedRecommendationKeys: [],
       monthlyMovieGoal: 3,
       monthlyGameGoal: 2,
+      seenAchievementIds: [],
       setUsername: (username) => set({ username }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setAlertsNewSeason: (alertsNewSeason) => set({ alertsNewSeason }),
@@ -48,6 +51,12 @@ export const usePreferencesStore = create<PreferencesState>()(
         })),
       setMonthlyMovieGoal: (monthlyMovieGoal) => set({ monthlyMovieGoal }),
       setMonthlyGameGoal: (monthlyGameGoal) => set({ monthlyGameGoal }),
+      markAchievementSeen: (id) =>
+        set((state) => ({
+          seenAchievementIds: state.seenAchievementIds.includes(id)
+            ? state.seenAchievementIds
+            : [...state.seenAchievementIds, id],
+        })),
     }),
     {
       name: 'flicksy-preferences',

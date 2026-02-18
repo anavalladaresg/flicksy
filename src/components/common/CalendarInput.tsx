@@ -117,13 +117,18 @@ function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fech
 
             <View style={styles.weekRow}>
               {WEEKDAYS.map((w) => (
-                <Text key={w} style={[styles.weekday, { color: isDark ? '#94A3B8' : '#64748B' }]}>{w}</Text>
+                <Text
+                  key={w}
+                  style={[styles.weekday, { width: cellSize, color: isDark ? '#94A3B8' : '#64748B' }]}
+                >
+                  {w}
+                </Text>
               ))}
             </View>
 
             <View style={styles.grid} onLayout={onGridLayout}>
               {days.map((date, idx) => {
-                if (!date) return <View key={`empty-${idx}`} style={styles.dayCell} />;
+                if (!date) return <View key={`empty-${idx}`} style={[styles.dayCell, { width: cellSize, height: cellSize }]} />;
                 const selectedMatch =
                   selected &&
                   date.getFullYear() === selected.getFullYear() &&
@@ -213,9 +218,9 @@ const styles = StyleSheet.create({
   weekRow: {
     marginTop: 10,
     flexDirection: 'row',
+    alignSelf: 'center',
   },
   weekday: {
-    width: `${100 / 7}%`,
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '700',

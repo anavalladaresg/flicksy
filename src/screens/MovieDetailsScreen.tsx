@@ -3,7 +3,7 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
@@ -19,7 +19,9 @@ import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useMovieDetails } from '../features/movies/presentation/hooks';
+import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
+import type { TrackedItem } from '../types';
 
 interface MovieDetailsScreenProps {
   route: any;
@@ -31,7 +33,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   navigation,
 }) => {
   const isDark = useColorScheme() === 'dark';
-  const { movieId } = route.params;
+  const { movieId, fromFriendId, fromFriendName } = route.params;
   const { data: movie, isLoading, isError, refetch } = useMovieDetails(movieId);
   const addTrackedItem = useTrackingStore((state) => state.addItem);
   const updateTrackedItem = useTrackingStore((state) => state.updateItem);
@@ -41,6 +43,8 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const [rating, setRating] = useState(0);
   const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('watching');
   const [watchedAt, setWatchedAt] = useState('');
+  const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
+  const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
   const isTracked = trackedItems.some(
     (item) => item.externalId === movieId && item.mediaType === 'movie'
@@ -48,6 +52,35 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const trackedMovieItem = trackedItems.find(
     (item) => item.externalId === movieId && item.mediaType === 'movie'
   );
+  const visibleFriendsRatings = fromFriendId
+    ? friendsRatings.filter((entry) => entry.friendId !== fromFriendId)
+    : friendsRatings;
+
+  useEffect(() => {
+    if (!fromFriendId || !movieId) {
+      setFriendTrackedItem(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const item = await getFriendLibraryItem(fromFriendId, 'movie', movieId);
+      if (!cancelled) setFriendTrackedItem(item);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromFriendId, movieId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ratings = await getFriendsRatingsForItem('movie', movieId);
+      if (!cancelled) setFriendsRatings(ratings);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [movieId]);
 
   function statusLabel(value: 'planned' | 'watching' | 'completed') {
     if (value === 'planned') return 'Pendiente';
@@ -237,6 +270,22 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
               </Text>
             </View>
           )}
+          {!trackedMovieItem && friendTrackedItem && (
+            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
+              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
+                {fromFriendName || 'Tu amigo/a'} ha puntuado esta película con{' '}
+                {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
+              </Text>
+            </View>
+          )}
+          {visibleFriendsRatings.length > 0 && (
+            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
+              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
+                {visibleFriendsRatings[0].friendName} ha puntuado esta película con {visibleFriendsRatings[0].rating.toFixed(1)} ⭐️
+                {visibleFriendsRatings.length > 1 ? ` · +${visibleFriendsRatings.length - 1} amigo(s)` : ''}.
+              </Text>
+            </View>
+          )}
 
           <View style={styles.info}>
             {movie.runtime && (
@@ -377,6 +426,25 @@ const styles = StyleSheet.create({
   myDataCardDark: {
     backgroundColor: '#111827',
     borderColor: '#334155',
+  },
+  friendDataCard: {
+    marginTop: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  friendDataCardDark: {
+    backgroundColor: '#1F2937',
+    borderColor: '#92400E',
+  },
+  friendDataText: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   editDataButton: {
     position: 'absolute',

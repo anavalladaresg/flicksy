@@ -8,6 +8,8 @@ import 'react-native-reanimated';
 import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { QueryProvider } from '../src/providers/QueryProvider';
+import { configureNotifications, registerPushToken } from '../src/services/notifications';
+import { saveOwnPushToken } from '../src/services/social';
 import { useTrackingStore } from '../src/store/tracking';
 
 export const unstable_settings = {
@@ -19,8 +21,16 @@ export default function RootLayout() {
   const { isLoading: isAuthLoading, isSignedIn } = useAuthStatus();
 
   useEffect(() => {
+    configureNotifications();
+  }, []);
+
+  useEffect(() => {
     if (isSignedIn) {
       void useTrackingStore.getState().bootstrapRemote();
+      void (async () => {
+        const token = await registerPushToken();
+        if (token) await saveOwnPushToken(token);
+      })();
     } else {
       useTrackingStore.setState({ items: [], remoteReady: false });
     }
@@ -49,6 +59,8 @@ export default function RootLayout() {
           <Stack.Screen name="movie/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="tv/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="game/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="friends" options={{ headerShown: false }} />
+          <Stack.Screen name="friend/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

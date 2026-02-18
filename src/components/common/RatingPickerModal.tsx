@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   Modal,
@@ -62,21 +62,27 @@ function RatingPickerModal({
 }: RatingPickerModalProps) {
   const isDark = useColorScheme() === 'dark';
   const [starsWidth, setStarsWidth] = useState(0);
-  const startValueRef = useRef(value);
+  const starsTrackRef = useRef<View | null>(null);
+  const trackPageXRef = useRef(0);
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  const setRatingFromDelta = useCallback((dx: number) => {
-    if (starsWidth <= 0) return;
-    const pointsPerStep = starsWidth / 20;
-    const steps = Math.round(dx / pointsPerStep);
-    const next = Math.max(0, Math.min(10, startValueRef.current + steps * 0.5));
-    onChange(next);
-  }, [onChange, starsWidth]);
+  const measureTrack = useCallback(() => {
+    starsTrackRef.current?.measureInWindow((x) => {
+      trackPageXRef.current = x;
+    });
+  }, []);
 
-  const ratingFromTouchX = useCallback((locationX: number) => {
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(measureTrack, 0);
+    return () => clearTimeout(timer);
+  }, [measureTrack, visible]);
+
+  const ratingFromTouchX = useCallback((pageX: number) => {
     if (starsWidth <= 0) return valueRef.current || 0;
-    const boundedX = Math.max(0, Math.min(starsWidth, locationX));
+    const localX = pageX - trackPageXRef.current;
+    const boundedX = Math.max(0, Math.min(starsWidth, localX));
     const pointsPerStep = starsWidth / 20;
     const steps = Math.round(boundedX / pointsPerStep);
     return Math.max(0, Math.min(10, steps * 0.5));
@@ -88,13 +94,12 @@ function RatingPickerModal({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (event) => {
-          const tappedValue = ratingFromTouchX(event.nativeEvent.locationX);
-          startValueRef.current = tappedValue;
+          const tappedValue = ratingFromTouchX(event.nativeEvent.pageX);
           onChange(tappedValue);
         },
-        onPanResponderMove: (_, gestureState) => setRatingFromDelta(gestureState.dx),
+        onPanResponderMove: (_, gestureState) => onChange(ratingFromTouchX(gestureState.moveX)),
       }),
-    [onChange, ratingFromTouchX, setRatingFromDelta]
+    [onChange, ratingFromTouchX]
   );
 
   const hasInvalidRange =
@@ -137,8 +142,12 @@ function RatingPickerModal({
 
           <View style={styles.starsRow}>
             <View
+              ref={starsTrackRef}
               style={styles.starsTrack}
-              onLayout={(event) => setStarsWidth(event.nativeEvent.layout.width)}
+              onLayout={(event) => {
+                setStarsWidth(event.nativeEvent.layout.width);
+                measureTrack();
+              }}
               {...panResponder.panHandlers}
             >
               {Array.from({ length: 10 }, (_, idx) => idx + 1).map((index) => (
