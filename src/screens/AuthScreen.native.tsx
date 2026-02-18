@@ -1,3 +1,6 @@
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth, useSSO, useSignIn, useSignUp, useUser } from '@clerk/clerk-expo';
+import { MaterialIcons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,9 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth, useSSO, useSignIn, useSignUp, useUser } from '@clerk/clerk-expo';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { syncOwnProfile } from '../services/social';
 import { usePreferencesStore } from '../store/preferences';
 
@@ -219,13 +219,15 @@ export default function AuthScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={[styles.hero, isDark && styles.heroDark]}>
           <Text style={[styles.brand, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Flicksy</Text>
-          <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Tu catálogo de pelis, series y juegos</Text>
+          <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
+            Descubre, guarda y comparte tus pelis, series y juegos favoritos.
+          </Text>
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark]}>
           {emailMode === null ? (
             <>
-              <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Inicia sesión</Text>
+              <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Bienvenido de nuevo</Text>
 
               <TouchableOpacity
                 style={[styles.socialButton, styles.googleButton]}
@@ -233,21 +235,21 @@ export default function AuthScreen() {
                 disabled={socialLoading !== null}
               >
                 {socialLoading === 'google' ? <ActivityIndicator color="#0F172A" size="small" /> : <MaterialIcons name="g-translate" size={20} color="#0F172A" />}
-                <Text style={styles.googleButtonText}>Continuar con Google</Text>
+                <Text style={styles.googleButtonText}>Seguir con Google</Text>
               </TouchableOpacity>
 
               <View style={styles.separatorRow}>
                 <View style={[styles.separatorLine, { backgroundColor: isDark ? '#334155' : '#CBD5E1' }]} />
-                <Text style={[styles.separatorText, { color: isDark ? '#94A3B8' : '#64748B' }]}>o por email</Text>
+                <Text style={[styles.separatorText, { color: isDark ? '#94A3B8' : '#64748B' }]}>o con tu email</Text>
                 <View style={[styles.separatorLine, { backgroundColor: isDark ? '#334155' : '#CBD5E1' }]} />
               </View>
 
               <View style={styles.rowGap}>
                 <TouchableOpacity style={styles.primaryButton} onPress={() => startEmailMode('signin')}>
-                  <Text style={styles.primaryButtonText}>Iniciar sesión con email</Text>
+                  <Text style={styles.primaryButtonText}>Entrar con email</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryButton} onPress={() => startEmailMode('signup')}>
-                  <Text style={styles.secondaryButtonText}>Crear cuenta con email</Text>
+                  <Text style={styles.secondaryButtonText}>Crear cuenta gratis</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -300,7 +302,7 @@ export default function AuthScreen() {
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>{showCodeInput ? 'Verificar código' : emailMode === 'signin' ? 'Entrar' : 'Continuar'}</Text>
+                  <Text style={styles.primaryButtonText}>{showCodeInput ? 'Verificar código' : emailMode === 'signin' ? 'Iniciar sesión' : 'Continuar'}</Text>
                 )}
               </TouchableOpacity>
 
