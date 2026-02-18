@@ -196,13 +196,13 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#fff' }]}>
-      <ScrollView>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            style={[styles.backButton, isDark && styles.backButtonDark]}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#fff" />
+            <MaterialIcons name="arrow-back" size={22} color={isDark ? '#E2E8F0' : '#0F172A'} />
           </TouchableOpacity>
         </View>
 
@@ -215,10 +215,11 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
               style={styles.backdrop}
               resizeMode="cover"
             />
+            <View style={[styles.backdropOverlay, isDark && styles.backdropOverlayDark]} />
           </View>
         )}
 
-        <View style={styles.content}>
+        <View style={[styles.content, isDark && styles.contentDark]}>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#333' }]}>{game.name}</Text>
             <TouchableOpacity
@@ -294,14 +295,14 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
           <View style={styles.info}>
             {game.rating && (
-              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#666' }]}>
-                🌐 {(game.rating / 10).toFixed(1)}/10
-              </Text>
+              <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
+                <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>🌐 {(game.rating / 10).toFixed(1)}/10</Text>
+              </View>
             )}
             {game.release_dates && game.release_dates.length > 0 && (
-              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#666' }]}>
-                📅 {new Date(game.release_dates[0].date * 1000).getFullYear()}
-              </Text>
+              <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
+                <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>📅 {new Date(game.release_dates[0].date * 1000).getFullYear()}</Text>
+              </View>
             )}
           </View>
 
@@ -330,15 +331,19 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
           {game.summary && (
             <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#333' }]}>Resumen</Text>
-              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#666' }]}>{game.summary}</Text>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
+              <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
+                <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{game.summary}</Text>
+              </View>
             </>
           )}
 
           {game.storyline && (
             <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#333' }]}>Historia</Text>
-              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#666' }]}>{game.storyline}</Text>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Historia</Text>
+              <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
+                <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{game.storyline}</Text>
+              </View>
             </>
           )}
 
@@ -372,6 +377,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  scrollContent: {
+    paddingBottom: 26,
+  },
   header: {
     position: 'absolute',
     top: 0,
@@ -386,20 +394,48 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(248,250,252,0.88)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.4)',
+  },
+  backButtonDark: {
+    backgroundColor: 'rgba(15,23,42,0.76)',
+    borderColor: 'rgba(100,116,139,0.46)',
   },
   backdrop: {
     width: '100%',
-    height: 300,
+    height: 340,
   },
   backdropWrap: {
     position: 'relative',
   },
+  backdropOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.32)',
+  },
+  backdropOverlayDark: {
+    backgroundColor: 'rgba(2,6,23,0.52)',
+  },
   content: {
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 18,
+    marginTop: -30,
+    marginHorizontal: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    elevation: 8,
+  },
+  contentDark: {
+    borderColor: '#1E293B',
+    backgroundColor: '#0B1220',
   },
   titleRow: {
     flexDirection: 'row',
@@ -410,9 +446,10 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 27,
+    fontWeight: '800',
     color: '#333',
+    letterSpacing: 0.2,
   },
   inlineAddButton: {
     flexDirection: 'row',
@@ -529,13 +566,25 @@ const styles = StyleSheet.create({
   info: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 10,
     marginBottom: 16,
   },
+  metaChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CFFAFE',
+    backgroundColor: '#F0FDFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metaChipDark: {
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+  },
   infoText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '700',
   },
   genres: {
     flexDirection: 'row',
@@ -544,15 +593,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   genreTag: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
   },
   genreText: {
     fontSize: 12,
-    color: '#2196F3',
-    fontWeight: '600',
+    color: '#0369A1',
+    fontWeight: '700',
   },
   platforms: {
     flexDirection: 'row',
@@ -561,28 +612,43 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   platformTag: {
-    backgroundColor: '#F3E5F5',
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
   },
   platformText: {
     fontSize: 12,
-    color: '#9C27B0',
-    fontWeight: '600',
+    color: '#6D28D9',
+    fontWeight: '700',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     color: '#333',
     marginTop: 12,
     marginBottom: 8,
   },
+  descriptionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  descriptionCardDark: {
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
+  },
   description: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
     color: '#666',
-    marginBottom: 20,
   },
 });
 

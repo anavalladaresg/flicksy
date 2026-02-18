@@ -3,7 +3,7 @@ import { useClerk, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
@@ -11,6 +11,7 @@ import { tvRepository } from '../features/tv/data/repositories';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 import {
   getFriendsCount,
+  getFriendsList,
   getIncomingFriendRequests,
   isUsernameAvailable,
   respondFriendRequest,
@@ -24,7 +25,8 @@ import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
 import { sendLocalNotification } from '../services/notifications';
-import { requestWebNotificationPermission, showInAppNotification } from '../services/in-app-notifications';
+import { showInAppNotification } from '../services/in-app-notifications';
+import { ACHIEVEMENT_DEFINITIONS } from '../features/achievements/catalog';
 
 function averageRating(items: TrackedItem[], type: MediaType): number {
   const filtered = items.filter((item) => item.mediaType === type && typeof item.rating === 'number');
@@ -70,6 +72,18 @@ function isCurrentMonth(iso?: string): boolean {
   return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 }
 
+function periodKey(date: Date, period: 'weekly' | 'monthly'): string {
+  if (period === 'monthly') return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return `W-${mondayWeekKey(date)}`;
+}
+
+function previousPeriodDate(period: 'weekly' | 'monthly', from = new Date()): Date {
+  const copy = new Date(from);
+  if (period === 'monthly') copy.setMonth(copy.getMonth() - 1);
+  else copy.setDate(copy.getDate() - 7);
+  return copy;
+}
+
 function ProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
@@ -78,26 +92,24 @@ function ProfileScreen() {
   const username = usePreferencesStore((state) => state.username);
   const themeMode = usePreferencesStore((state) => state.themeMode);
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
-  const alertsAchievements = usePreferencesStore((state) => state.alertsAchievements);
   const alertsFriendRequests = usePreferencesStore((state) => state.alertsFriendRequests);
-  const alertsFriendsActivity = usePreferencesStore((state) => state.alertsFriendsActivity);
-  const alertsNewSeason = usePreferencesStore((state) => state.alertsNewSeason);
-  const alertsUpcomingRelease = usePreferencesStore((state) => state.alertsUpcomingRelease);
-  const setAlertsAchievements = usePreferencesStore((state) => state.setAlertsAchievements);
-  const setAlertsFriendRequests = usePreferencesStore((state) => state.setAlertsFriendRequests);
-  const setAlertsFriendsActivity = usePreferencesStore((state) => state.setAlertsFriendsActivity);
-  const setAlertsNewSeason = usePreferencesStore((state) => state.setAlertsNewSeason);
-  const setAlertsUpcomingRelease = usePreferencesStore((state) => state.setAlertsUpcomingRelease);
+  const alertsGoals = usePreferencesStore((state) => state.alertsGoals);
   const monthlyMovieGoal = usePreferencesStore((state) => state.monthlyMovieGoal);
   const monthlyGameGoal = usePreferencesStore((state) => state.monthlyGameGoal);
+  const movieGoalPeriod = usePreferencesStore((state) => state.movieGoalPeriod);
+  const gameGoalPeriod = usePreferencesStore((state) => state.gameGoalPeriod);
+  const setMovieGoalPeriod = usePreferencesStore((state) => state.setMovieGoalPeriod);
+  const setGameGoalPeriod = usePreferencesStore((state) => state.setGameGoalPeriod);
+  const setMonthlyMovieGoal = usePreferencesStore((state) => state.setMonthlyMovieGoal);
+  const setMonthlyGameGoal = usePreferencesStore((state) => state.setMonthlyGameGoal);
+  const goalPeriodStatuses = usePreferencesStore((state) => state.goalPeriodStatuses);
+  const setGoalPeriodStatus = usePreferencesStore((state) => state.setGoalPeriodStatus);
   const setUsername = usePreferencesStore((state) => state.setUsername);
-  const seenAchievementIds = usePreferencesStore((state) => state.seenAchievementIds);
-  const markAchievementSeen = usePreferencesStore((state) => state.markAchievementSeen);
+  const unlockedAchievementIds = usePreferencesStore((state) => state.unlockedAchievementIds);
   const trackedItems = useTrackingStore((state) => state.items);
   const darkEnabled = themeMode === 'dark';
   const isWeb = Platform.OS === 'web';
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
-  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const emailAddress = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
   const computedUsername = (emailAddress.split('@')[0] || username || 'usuario').toLowerCase();
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || computedUsername;
@@ -105,6 +117,7 @@ function ProfileScreen() {
   const [nameSaving, setNameSaving] = useState(false);
   const [friendsQuery, setFriendsQuery] = useState('');
   const [friendResults, setFriendResults] = useState<FriendProfile[]>([]);
+  const [friendsPreview, setFriendsPreview] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
   const [friendMessage, setFriendMessage] = useState('');
@@ -194,6 +207,7 @@ function ProfileScreen() {
     detailMovies.forEach((movie) => movie.genres?.forEach((genre) => push(genre.name)));
     detailTV.forEach((show) => show.genres?.forEach((genre) => push(genre.name)));
     detailGames.forEach((game) => game.genres?.forEach((genre) => push(genre.name)));
+
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -227,78 +241,49 @@ function ProfileScreen() {
     return monthItems.reduce((acc, item) => acc + (item.rating ?? 0), 0) / monthItems.length;
   }, [trackedItems]);
 
-  const completedMoviesThisMonth = trackedItems.filter(
-    (item) => item.mediaType === 'movie' && isCurrentMonth(item.watchedAt || item.dateAdded)
-  ).length;
-  const completedGamesThisMonth = trackedItems.filter(
-    (item) => item.mediaType === 'game' && item.status === 'completed' && isCurrentMonth(item.finishedAt || item.dateAdded)
-  ).length;
-
-  const newSeasonAlerts = useMemo(() => {
-    const seasonMap = new Map(detailTV.map((show) => [show.id, show.number_of_seasons ?? 0]));
-    return trackedItems
-      .filter((item) => item.mediaType === 'tv' && typeof item.seasonsAtAdd === 'number')
-      .filter((item) => (seasonMap.get(item.externalId) ?? 0) > (item.seasonsAtAdd ?? 0));
-  }, [trackedItems, detailTV]);
-
-  const upcomingReleaseAlerts = useMemo(() => {
+  const movieGoalProgress = useMemo(() => {
     const now = new Date();
-    const in45 = new Date();
-    in45.setDate(now.getDate() + 45);
-
-    const movieById = new Map(detailMovies.map((movie) => [movie.id, movie.release_date]));
-    const tvById = new Map(detailTV.map((show) => [show.id, show.first_air_date]));
-    const gameById = new Map(detailGames.map((game) => [game.id, game.release_dates?.[0]?.date]));
-
+    const key = periodKey(now, movieGoalPeriod);
     return trackedItems.filter((item) => {
-      if (item.mediaType === 'movie') {
-        const date = movieById.get(item.externalId);
-        if (!date) return false;
-        const dt = new Date(date);
-        return dt >= now && dt <= in45;
-      }
-      if (item.mediaType === 'tv') {
-        const date = tvById.get(item.externalId);
-        if (!date) return false;
-        const dt = new Date(date);
-        return dt >= now && dt <= in45;
-      }
-      const unix = gameById.get(item.externalId);
-      if (!unix) return false;
-      const dt = new Date(unix * 1000);
-      return dt >= now && dt <= in45;
-    });
-  }, [trackedItems, detailMovies, detailTV, detailGames]);
+      if (item.mediaType !== 'movie') return false;
+      const date = new Date(item.watchedAt || item.finishedAt || item.dateAdded);
+      if (Number.isNaN(date.getTime())) return false;
+      return periodKey(date, movieGoalPeriod) === key;
+    }).length;
+  }, [movieGoalPeriod, trackedItems]);
 
-  const achievements = useMemo(() => {
-    const list: { id: string; label: string; unlocked: boolean }[] = [
-      { id: 'streak-2', label: 'Racha de 2 semanas', unlocked: streak >= 2 },
-      { id: 'library-25', label: 'Biblioteca de 25 items', unlocked: trackedItems.length >= 25 },
-      { id: 'genres-5', label: 'Explorador: 5 géneros', unlocked: topGenres.length >= 5 },
-      { id: 'movies-goal', label: `Objetivo pelis (${monthlyMovieGoal}/mes)`, unlocked: completedMoviesThisMonth >= monthlyMovieGoal },
-      { id: 'games-goal', label: `Objetivo juegos (${monthlyGameGoal}/mes)`, unlocked: completedGamesThisMonth >= monthlyGameGoal },
-    ];
-    return list;
-  }, [streak, trackedItems.length, topGenres.length, monthlyMovieGoal, monthlyGameGoal, completedMoviesThisMonth, completedGamesThisMonth]);
+  const gameGoalProgress = useMemo(() => {
+    const now = new Date();
+    const key = periodKey(now, gameGoalPeriod);
+    return trackedItems.filter((item) => {
+      if (item.mediaType !== 'game' || item.status !== 'completed') return false;
+      const date = new Date(item.finishedAt || item.dateAdded);
+      if (Number.isNaN(date.getTime())) return false;
+      return periodKey(date, gameGoalPeriod) === key;
+    }).length;
+  }, [gameGoalPeriod, trackedItems]);
 
-  useEffect(() => {
-    const newlyUnlocked = achievements.find((achievement) => achievement.unlocked && !seenAchievementIds.includes(achievement.id));
-    if (!newlyUnlocked) return;
-    if (alertsAchievements) {
-      showInAppNotification('success', 'Logro desbloqueado', newlyUnlocked.label);
-    }
-    markAchievementSeen(newlyUnlocked.id);
-  }, [achievements, alertsAchievements, markAchievementSeen, seenAchievementIds]);
+  const achievementPreviewCards = useMemo(
+    () =>
+      ACHIEVEMENT_DEFINITIONS.map((achievement) => ({
+        ...achievement,
+        unlocked: unlockedAchievementIds.includes(achievement.id),
+      }))
+        .sort((a, b) => Number(b.unlocked) - Number(a.unlocked))
+        .slice(0, 5),
+    [unlockedAchievementIds]
+  );
 
   useEffect(() => {
     let cancelled = false;
     const refreshFriendsData = async () => {
       setUsername(computedUsername);
       await syncOwnProfile(computedUsername);
-      const [count, requests] = await Promise.all([getFriendsCount(), getIncomingFriendRequests()]);
+      const [count, requests, friends] = await Promise.all([getFriendsCount(), getIncomingFriendRequests(), getFriendsList()]);
       if (!cancelled) {
         setFriendsCount(count);
         setIncomingRequests(requests);
+        setFriendsPreview(friends.slice(0, 4));
       }
     };
     void refreshFriendsData();
@@ -308,6 +293,71 @@ function ProfileScreen() {
       clearInterval(interval);
     };
   }, [computedUsername, setUsername]);
+
+  useEffect(() => {
+    const now = new Date();
+    const evaluateGoal = (
+      goalType: 'movie' | 'game',
+      target: number,
+      period: 'weekly' | 'monthly'
+    ) => {
+      const keyCurrent = `${goalType}-${period}-${periodKey(now, period)}`;
+      const previousDate = previousPeriodDate(period, now);
+      const keyPrevious = `${goalType}-${period}-${periodKey(previousDate, period)}`;
+
+      const getCount = (refDate: Date) => {
+        const key = periodKey(refDate, period);
+        if (goalType === 'movie') {
+          return trackedItems.filter((item) => {
+            if (item.mediaType !== 'movie') return false;
+            const base = new Date(item.watchedAt || item.finishedAt || item.dateAdded);
+            if (Number.isNaN(base.getTime())) return false;
+            return periodKey(base, period) === key;
+          }).length;
+        }
+        return trackedItems.filter((item) => {
+          if (item.mediaType !== 'game' || item.status !== 'completed') return false;
+          const base = new Date(item.finishedAt || item.dateAdded);
+          if (Number.isNaN(base.getTime())) return false;
+          return periodKey(base, period) === key;
+        }).length;
+      };
+
+      const currentCount = getCount(now);
+      const previousCount = getCount(previousDate);
+
+      if (!goalPeriodStatuses[keyCurrent] && currentCount >= target) {
+        setGoalPeriodStatus(keyCurrent, 'success');
+        if (alertsGoals) {
+          showInAppNotification('success', 'Objetivo cumplido', `Has completado tu objetivo de ${goalType === 'movie' ? 'películas' : 'juegos'}.`);
+        }
+      }
+
+      if (!goalPeriodStatuses[keyPrevious]) {
+        const previousStatus = previousCount >= target ? 'success' : 'fail';
+        setGoalPeriodStatus(keyPrevious, previousStatus);
+        if (alertsGoals) {
+          showInAppNotification(
+            previousStatus === 'success' ? 'success' : 'warning',
+            previousStatus === 'success' ? 'Objetivo del periodo anterior cumplido' : 'Objetivo del periodo anterior no cumplido',
+            `${goalType === 'movie' ? 'Películas' : 'Juegos'}: ${previousCount}/${target}`
+          );
+        }
+      }
+    };
+
+    evaluateGoal('movie', monthlyMovieGoal, movieGoalPeriod);
+    evaluateGoal('game', monthlyGameGoal, gameGoalPeriod);
+  }, [
+    alertsGoals,
+    gameGoalPeriod,
+    goalPeriodStatuses,
+    monthlyGameGoal,
+    monthlyMovieGoal,
+    movieGoalPeriod,
+    setGoalPeriodStatus,
+    trackedItems,
+  ]);
 
   async function handleSaveUsername() {
     const next = nameDraft.trim();
@@ -359,69 +409,68 @@ function ProfileScreen() {
     setIncomingRequests(requests);
   }
 
-  async function handleEnableBrowserNotifications() {
-    const result = await requestWebNotificationPermission();
-    if (result === 'unsupported') {
-      showInAppNotification('warning', 'No disponible', 'Este navegador no soporta permisos de notificación.');
-      return;
-    }
-    if (result === 'granted') {
-      showInAppNotification('success', 'Notificaciones activadas', 'Recibirás avisos dentro de Flicksy.');
-      return;
-    }
-    showInAppNotification('info', 'Permiso pendiente', 'Puedes activar notificaciones desde ajustes del navegador.');
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
       <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}>
-        <View style={[styles.card, isDark && styles.cardDark]}>
-          <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
-          <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
-          <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
-          {isSupabaseConfigured ? (
-            <TouchableOpacity style={styles.logoutButton} onPress={() => void signOut()}>
-              <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
-            </TouchableOpacity>
+        <View style={isWeb ? styles.bentoGrid : undefined}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoHero]}>
+          {isWeb ? (
+            <>
+              <View style={[styles.heroGlowLarge, isDark && styles.heroGlowLargeDark]} />
+              <View style={[styles.heroGlowSmall, isDark && styles.heroGlowSmallDark]} />
+              <Text style={[styles.heroEyebrow, { color: isDark ? '#7DD3FC' : '#0E7490' }]}>PROFILE HUB</Text>
+            </>
           ) : null}
-          <TouchableOpacity
-            style={[styles.testNotificationButton, isDark && styles.testNotificationButtonDark]}
-            onPress={() => {
-              showInAppNotification('success', 'Notificación de prueba', 'Esta es una notificación de éxito usando Sileo');
-            }}
-          >
-            <Text style={styles.testNotificationButtonText}>Probar notificación</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.card, isDark && styles.cardDark]}>
-          <View style={styles.row}>
-            <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Modo oscuro</Text>
-            <Switch
-              value={darkEnabled}
-              onValueChange={(next) => setThemeMode(next ? 'dark' : 'light')}
-              trackColor={{ false: '#CBD5E1', true: '#0E7490' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-          <TouchableOpacity style={[styles.notificationsButton, isDark && styles.notificationsButtonDark]} onPress={() => setIsNotificationModalOpen(true)}>
-            <View>
-              <Text style={[styles.notificationsButtonTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Alertas y notificaciones</Text>
-              <Text style={[styles.notificationsButtonSub, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                Configura logros, amistades, estrenos y actividad.
-              </Text>
+          <View style={styles.profileTopRow}>
+            <View style={styles.profileMainInfo}>
+              <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
+              <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
+              <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
             </View>
-            <MaterialIcons name="tune" size={18} color={isDark ? '#7DD3FC' : '#0E7490'} />
-          </TouchableOpacity>
-          <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-            {alertsNewSeason ? `${newSeasonAlerts.length} aviso(s) de nueva temporada.` : 'Alertas de temporada desactivadas.'}
-          </Text>
-          <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-            {alertsUpcomingRelease ? `${upcomingReleaseAlerts.length} estreno(s) cercano(s) detectado(s).` : 'Alertas de estreno desactivadas.'}
-          </Text>
+            <View style={styles.profileActionsColumn}>
+              <TouchableOpacity
+                style={[styles.themePill, isDark && styles.themePillDark]}
+                onPress={() => setThemeMode(darkEnabled ? 'light' : 'dark')}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.themeIconSlot, styles.themeIconSun]}>
+                  <MaterialIcons name="wb-sunny" size={14} color={darkEnabled ? '#64748B' : '#F59E0B'} />
+                </View>
+                <View style={[styles.themeIconSlot, styles.themeIconMoon]}>
+                  <MaterialIcons name="nights-stay" size={13} color={darkEnabled ? '#93C5FD' : '#94A3B8'} />
+                </View>
+                <View
+                  style={[
+                    styles.themeKnob,
+                    darkEnabled && styles.themeKnobDark,
+                    isWeb
+                      ? ({
+                          transitionProperty: 'transform, background-color',
+                          transitionDuration: '220ms',
+                          transitionTimingFunction: 'ease-out',
+                        } as any)
+                      : null,
+                  ]}
+                />
+              </TouchableOpacity>
+              {isSupabaseConfigured ? (
+                <TouchableOpacity style={styles.logoutButton} onPress={() => void signOut()}>
+                  <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.testNotificationButton, isDark && styles.testNotificationButtonDark]}
+                onPress={() => {
+                  showInAppNotification('success', 'Notificación de prueba', 'Todo funciona correctamente.');
+                }}
+              >
+                <Text style={styles.testNotificationButtonText}>Probar notificación</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoTwoThird]}>
           <View style={styles.friendsHeaderRow}>
             <View style={styles.friendsTitleRow}>
               <Text style={[styles.friendsBlockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Amigos</Text>
@@ -429,9 +478,6 @@ function ProfileScreen() {
                 <Text style={styles.friendsCountText}>{friendsCount}</Text>
               </View>
             </View>
-            <TouchableOpacity style={[styles.friendsListBtn, isDark && styles.friendsListBtnDark]} onPress={() => router.push('/friends')}>
-              <MaterialIcons name="format-list-bulleted" size={15} color={isDark ? '#E5E7EB' : '#0F172A'} />
-            </TouchableOpacity>
           </View>
 
           {incomingRequests.length > 0 ? (
@@ -480,9 +526,27 @@ function ProfileScreen() {
               </TouchableOpacity>
             </View>
           ))}
+          <View style={styles.friendsPreviewSection}>
+            <Text style={[styles.subSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Tus amigos destacados</Text>
+            {friendsPreview.length === 0 ? (
+              <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Aún no tienes amigos añadidos.</Text>
+            ) : (
+              friendsPreview.map((friend) => (
+                <View key={friend.id} style={[styles.friendPreviewRow, isDark && styles.friendPreviewRowDark]}>
+                  <View style={styles.friendAvatarDot} />
+                  <Text style={[styles.friendPreviewName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+                    {friend.display_name || friend.username}
+                  </Text>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={styles.friendsSeeAllBtn} onPress={() => router.push('/friends')}>
+              <Text style={styles.friendsSeeAllText}>Ver todos los amigos</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoTwoThird, isWeb && styles.bentoTall]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Dashboard</Text>
           <View style={styles.statsRow}>
             <Text style={[styles.statLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Horas estimadas</Text>
@@ -517,27 +581,73 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Objetivos</Text>
           <View style={styles.goalItem}>
             <Text style={[styles.goalText, { color: isDark ? '#CBD5E1' : '#334155' }]}>
-              {`3 películas/mes: ${completedMoviesThisMonth}/${monthlyMovieGoal}`}
+              {`${movieGoalPeriod === 'monthly' ? 'Películas por mes' : 'Películas por semana'}: ${movieGoalProgress}/${monthlyMovieGoal}`}
             </Text>
+            <View style={styles.goalControlRow}>
+              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyMovieGoal(Math.max(1, monthlyMovieGoal - 1))}>
+                <Text style={styles.goalAdjustBtnText}>-</Text>
+              </TouchableOpacity>
+              <Text style={[styles.goalCountText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{monthlyMovieGoal}</Text>
+              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyMovieGoal(Math.min(30, monthlyMovieGoal + 1))}>
+                <Text style={styles.goalAdjustBtnText}>+</Text>
+              </TouchableOpacity>
+              <View style={styles.goalPeriodSwitch}>
+                <TouchableOpacity
+                  style={[styles.goalPeriodBtn, movieGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
+                  onPress={() => setMovieGoalPeriod('weekly')}
+                >
+                  <Text style={[styles.goalPeriodText, movieGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.goalPeriodBtn, movieGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
+                  onPress={() => setMovieGoalPeriod('monthly')}
+                >
+                  <Text style={[styles.goalPeriodText, movieGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={[styles.goalBarBg, isDark && styles.goalBarBgDark]}>
-              <View style={[styles.goalBarFill, { width: `${Math.min(100, (completedMoviesThisMonth / Math.max(1, monthlyMovieGoal)) * 100)}%` }]} />
+              <View style={[styles.goalBarFill, { width: `${Math.min(100, (movieGoalProgress / Math.max(1, monthlyMovieGoal)) * 100)}%` }]} />
             </View>
           </View>
           <View style={styles.goalItem}>
             <Text style={[styles.goalText, { color: isDark ? '#CBD5E1' : '#334155' }]}>
-              {`Terminar 2 juegos pendientes: ${completedGamesThisMonth}/${monthlyGameGoal}`}
+              {`${gameGoalPeriod === 'monthly' ? 'Juegos por mes' : 'Juegos por semana'}: ${gameGoalProgress}/${monthlyGameGoal}`}
             </Text>
+            <View style={styles.goalControlRow}>
+              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyGameGoal(Math.max(1, monthlyGameGoal - 1))}>
+                <Text style={styles.goalAdjustBtnText}>-</Text>
+              </TouchableOpacity>
+              <Text style={[styles.goalCountText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{monthlyGameGoal}</Text>
+              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyGameGoal(Math.min(20, monthlyGameGoal + 1))}>
+                <Text style={styles.goalAdjustBtnText}>+</Text>
+              </TouchableOpacity>
+              <View style={styles.goalPeriodSwitch}>
+                <TouchableOpacity
+                  style={[styles.goalPeriodBtn, gameGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
+                  onPress={() => setGameGoalPeriod('weekly')}
+                >
+                  <Text style={[styles.goalPeriodText, gameGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.goalPeriodBtn, gameGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
+                  onPress={() => setGameGoalPeriod('monthly')}
+                >
+                  <Text style={[styles.goalPeriodText, gameGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={[styles.goalBarBg, isDark && styles.goalBarBgDark]}>
-              <View style={[styles.goalBarFill, { width: `${Math.min(100, (completedGamesThisMonth / Math.max(1, monthlyGameGoal)) * 100)}%` }]} />
+              <View style={[styles.goalBarFill, { width: `${Math.min(100, (gameGoalProgress / Math.max(1, monthlyGameGoal)) * 100)}%` }]} />
             </View>
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Media de puntuación</Text>
           <View style={styles.statsRow}>
             <Text style={[styles.statLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Películas</Text>
@@ -553,7 +663,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Géneros más consumidos</Text>
           {topGenres.length === 0 ? (
             <Text style={[styles.emptyText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
@@ -570,16 +680,38 @@ function ProfileScreen() {
           )}
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Logros</Text>
-          {achievements.map((achievement) => (
-            <View key={achievement.id} style={styles.achievementRow}>
-              <Text style={[styles.achievementText, { color: isDark ? '#CBD5E1' : '#334155' }]}>{achievement.label}</Text>
+          <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+            {`Conseguidos: ${unlockedAchievementIds.length}`}
+          </Text>
+          {achievementPreviewCards.map((achievement) => (
+            <View
+              key={achievement.id}
+              style={[
+                styles.achievementRow,
+                !achievement.unlocked && styles.achievementRowPending,
+                isDark && !achievement.unlocked && styles.achievementRowPendingDark,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.achievementText,
+                  { color: isDark ? '#CBD5E1' : '#334155' },
+                  !achievement.unlocked && styles.achievementTextPending,
+                ]}
+              >
+                {achievement.title}
+              </Text>
               <Text style={[styles.achievementState, { color: achievement.unlocked ? '#16A34A' : '#94A3B8' }]}>
-                {achievement.unlocked ? 'Desbloqueado' : 'Bloqueado'}
+                {achievement.unlocked ? 'Conseguido' : 'Pendiente'}
               </Text>
             </View>
           ))}
+          <TouchableOpacity style={styles.friendsSeeAllBtn} onPress={() => router.push('/achievements')}>
+            <Text style={styles.friendsSeeAllText}>Ver logros conseguidos</Text>
+          </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
       <Modal visible={isEditNameOpen} transparent animationType="fade" onRequestClose={() => setIsEditNameOpen(false)}>
@@ -604,45 +736,6 @@ function ProfileScreen() {
           </View>
         </View>
       </Modal>
-      <Modal visible={isNotificationModalOpen} transparent animationType="fade" onRequestClose={() => setIsNotificationModalOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, styles.notificationsModalCard, isDark && styles.cardDark]}>
-            <View style={styles.modalNotificationsHeader}>
-              <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Notificaciones</Text>
-              <TouchableOpacity onPress={() => setIsNotificationModalOpen(false)}>
-                <MaterialIcons name="close" size={20} color={isDark ? '#E5E7EB' : '#0F172A'} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.row}>
-              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Logros</Text>
-              <Switch value={alertsAchievements} onValueChange={setAlertsAchievements} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
-            </View>
-            <View style={styles.row}>
-              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Solicitudes de amistad</Text>
-              <Switch value={alertsFriendRequests} onValueChange={setAlertsFriendRequests} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
-            </View>
-            <View style={styles.row}>
-              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Actividad de amigos</Text>
-              <Switch value={alertsFriendsActivity} onValueChange={setAlertsFriendsActivity} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
-            </View>
-            <View style={styles.row}>
-              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Nueva temporada</Text>
-              <Switch value={alertsNewSeason} onValueChange={setAlertsNewSeason} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
-            </View>
-            <View style={styles.row}>
-              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Estreno cercano</Text>
-              <Switch value={alertsUpcomingRelease} onValueChange={setAlertsUpcomingRelease} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
-            </View>
-
-            {isWeb ? (
-              <TouchableOpacity style={styles.modalSave} onPress={() => void handleEnableBrowserNotifications()}>
-                <Text style={styles.modalSaveText}>Activar permisos del navegador</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -662,12 +755,74 @@ const styles = StyleSheet.create({
     maxWidth: 1180,
     alignSelf: 'center',
   },
+  bentoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    alignItems: 'stretch',
+  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     padding: 14,
+  },
+  bentoCard: {
+    borderRadius: 22,
+    padding: 18,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    overflow: 'hidden',
+  },
+  bentoHero: {
+    width: '100%',
+    minHeight: 188,
+  },
+  bentoTall: {
+    minHeight: 336,
+  },
+  bentoTwoThird: {
+    width: '66%',
+    minWidth: 440,
+    flexGrow: 1,
+  },
+  bentoOneThird: {
+    width: '32%',
+    minWidth: 270,
+    flexGrow: 1,
+  },
+  heroEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginBottom: 8,
+  },
+  heroGlowLarge: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    right: -58,
+    top: -78,
+    backgroundColor: 'rgba(14,116,144,0.14)',
+  },
+  heroGlowLargeDark: {
+    backgroundColor: 'rgba(56,189,248,0.16)',
+  },
+  heroGlowSmall: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    left: -32,
+    bottom: -32,
+    backgroundColor: 'rgba(125,211,252,0.2)',
+  },
+  heroGlowSmallDark: {
+    backgroundColor: 'rgba(30,64,175,0.32)',
   },
   cardDark: {
     backgroundColor: '#111827',
@@ -689,6 +844,63 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#0F172A',
     fontWeight: '700',
+  },
+  profileTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  profileMainInfo: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  profileActionsColumn: {
+    minWidth: 170,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  themePill: {
+    width: 78,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    position: 'relative',
+  },
+  themeIconSlot: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    position: 'absolute',
+    top: 10,
+  },
+  themeIconSun: {
+    left: 10,
+  },
+  themeIconMoon: {
+    right: 10,
+  },
+  themePillDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  themeKnob: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#0E7490',
+    left: 5,
+    top: 7,
+    transform: [{ translateX: 0 }],
+  },
+  themeKnobDark: {
+    transform: [{ translateX: 44 }],
+    backgroundColor: '#1E40AF',
   },
   usernameRow: {
     marginTop: 4,
@@ -743,17 +955,6 @@ const styles = StyleSheet.create({
     color: '#0E7490',
     fontSize: 12,
     fontWeight: '800',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  modeLabel: {
-    fontSize: 15,
-    color: '#0F172A',
-    fontWeight: '700',
   },
   helpText: {
     fontSize: 12,
@@ -884,6 +1085,51 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
   },
+  friendsPreviewSection: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 8,
+  },
+  friendPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 6,
+  },
+  friendPreviewRowDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0B1220',
+  },
+  friendAvatarDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0E7490',
+  },
+  friendPreviewName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  friendsSeeAllBtn: {
+    marginTop: 4,
+    borderRadius: 10,
+    backgroundColor: '#0E7490',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  friendsSeeAllText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   friendResultName: {
     fontSize: 13,
     fontWeight: '700',
@@ -976,6 +1222,58 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 6,
   },
+  goalControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  goalAdjustBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  goalAdjustBtnText: {
+    color: '#0F172A',
+    fontWeight: '800',
+    fontSize: 13,
+    lineHeight: 15,
+  },
+  goalCountText: {
+    minWidth: 18,
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  goalPeriodSwitch: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  goalPeriodBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  goalPeriodBtnActive: {
+    backgroundColor: '#0E7490',
+  },
+  goalPeriodText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  goalPeriodTextActive: {
+    color: '#FFFFFF',
+  },
   goalBarBg: {
     width: '100%',
     height: 10,
@@ -1023,9 +1321,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
+  achievementRowPending: {
+    opacity: 0.78,
+  },
+  achievementRowPendingDark: {
+    borderBottomColor: '#334155',
+  },
   achievementText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  achievementTextPending: {
+    fontWeight: '600',
   },
   achievementState: {
     fontSize: 12,

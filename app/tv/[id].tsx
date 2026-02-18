@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 
+import FloatingModalShell from '@/src/components/common/FloatingModalShell';
 import TVDetailsScreen from '@/src/screens/TVDetailsScreen';
 
 export default function TVDetailsRoute() {
@@ -12,9 +13,11 @@ export default function TVDetailsRoute() {
   const tvId = Number(id);
 
   return (
-    <TVDetailsScreen
-      route={{ params: { tvId, fromFriendId, fromFriendName } }}
-      navigation={navigation}
-    />
+    <FloatingModalShell onClose={() => navigation.goBack()} maxWidth={1100}>
+      <TVDetailsScreen
+        route={{ params: { tvId, fromFriendId, fromFriendName } }}
+        navigation={navigation}
+      />
+    </FloatingModalShell>
   );
 }

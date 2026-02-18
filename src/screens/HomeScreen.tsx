@@ -18,6 +18,7 @@ import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useGamesBySort } from '../features/games/presentation/hooks';
 import { useMoviesBySort } from '../features/movies/presentation/hooks';
 import { useTVShowsBySort } from '../features/tv/presentation/hooks';
+import { showInAppNotification } from '../services/in-app-notifications';
 import { getFriendsActivity, type FriendActivityItem } from '../services/social';
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
@@ -475,7 +476,6 @@ function HomeScreen() {
   const trackedItems = useTrackingStore((state) => state.items);
   const dismissedRecommendationKeys = usePreferencesStore((state) => state.dismissedRecommendationKeys);
   const dismissRecommendation = usePreferencesStore((state) => state.dismissRecommendation);
-  const [feedbackMessage, setFeedbackMessage] = useState('');
   const [friendsActivity, setFriendsActivity] = useState<FriendActivityItem[]>([]);
   const moviesQuery = useMoviesBySort('vote_count.desc', 1);
   const moviesQueryPage2 = useMoviesBySort('vote_count.desc', 2);
@@ -603,12 +603,6 @@ function HomeScreen() {
   const allFailed = moviesQuery.isError && tvQuery.isError && gamesQuery.isError;
 
   useEffect(() => {
-    if (!feedbackMessage) return;
-    const timer = setTimeout(() => setFeedbackMessage(''), 2400);
-    return () => clearTimeout(timer);
-  }, [feedbackMessage]);
-
-  useEffect(() => {
     let cancelled = false;
     (async () => {
       const feed = await getFriendsActivity(10);
@@ -621,7 +615,7 @@ function HomeScreen() {
 
   function handleDismissRecommendation(item: RecommendationItem) {
     dismissRecommendation(`${item.mediaType}-${item.id}`);
-    setFeedbackMessage(`No recomendaremos "${item.name}" de nuevo.`);
+    showInAppNotification('info', 'Recomendación descartada', `No recomendaremos "${item.name}" de nuevo.`);
   }
 
   if (isLoading) {
@@ -696,14 +690,6 @@ function HomeScreen() {
           <SectionRow title="Juegos más jugados" type="game" items={games} dark={isDark} />
         )}
       </ScrollView>
-      {feedbackMessage ? (
-        <View style={[styles.feedbackToast, isDark && styles.feedbackToastDark]}>
-          <MaterialIcons name="check-circle" size={14} color={isDark ? '#A7F3D0' : '#065F46'} />
-          <Text style={[styles.feedbackText, { color: isDark ? '#D1FAE5' : '#065F46' }]} numberOfLines={2}>
-            {feedbackMessage}
-          </Text>
-        </View>
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -938,30 +924,6 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     paddingHorizontal: 16,
     marginTop: 18,
-  },
-  feedbackToast: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 14,
-    backgroundColor: '#D1FAE5',
-    borderColor: '#6EE7B7',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  feedbackToastDark: {
-    backgroundColor: '#064E3B',
-    borderColor: '#047857',
-  },
-  feedbackText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
   },
 });
 

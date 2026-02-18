@@ -14,11 +14,32 @@ export default async function handler(req: any, res: any) {
   }
 
   const pathParam = req.query?.path;
-  const endpoint = Array.isArray(pathParam) ? pathParam.join('/') : String(pathParam || '');
+  let endpoint = Array.isArray(pathParam) ? pathParam.join('/') : String(pathParam || '');
+
+  // Fallback robusto: en algunos entornos `req.query.path` llega vacío
+  // aunque la URL sea /api/igdb/games.
+  if (!endpoint) {
+    const rawUrl = typeof req.url === 'string' ? req.url : '';
+    const withoutQuery = rawUrl.split('?')[0] || '';
+    const marker = '/api/igdb/';
+    const markerIndex = withoutQuery.indexOf(marker);
+    if (markerIndex >= 0) {
+      endpoint = withoutQuery.slice(markerIndex + marker.length).replace(/^\/+|\/+$/g, '');
+    }
+  }
+
   if (!endpoint) {
     res.status(400).json({ error: 'Missing IGDB endpoint path' });
     return;
   }
+
+  // Debug para inspeccionar cómo entra la ruta en Vercel/local.
+  console.log('[IGDB proxy] incoming', {
+    method: req.method,
+    url: req.url,
+    queryPath: req.query?.path,
+    resolvedEndpoint: endpoint,
+  });
 
   const clientId = process.env.IGDB_CLIENT_ID || process.env.EXPO_PUBLIC_IGDB_CLIENT_ID;
   const accessToken = process.env.IGDB_ACCESS_TOKEN || process.env.EXPO_PUBLIC_IGDB_ACCESS_TOKEN;
@@ -41,6 +62,11 @@ export default async function handler(req: any, res: any) {
     });
 
     const raw = await igdbResponse.text();
+    console.log('[IGDB proxy] upstream', {
+      endpoint,
+      status: igdbResponse.status,
+      contentType: igdbResponse.headers.get('content-type'),
+    });
     res.status(igdbResponse.status);
     res.setHeader('Content-Type', igdbResponse.headers.get('content-type') || 'application/json');
     res.send(raw);
@@ -51,4 +77,3 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-

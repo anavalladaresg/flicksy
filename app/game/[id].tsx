@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 
+import FloatingModalShell from '@/src/components/common/FloatingModalShell';
 import GameDetailsScreen from '@/src/screens/GameDetailsScreen';
 
 export default function GameDetailsRoute() {
@@ -12,9 +13,11 @@ export default function GameDetailsRoute() {
   const gameId = Number(Array.isArray(id) ? id[0] : id);
 
   return (
-    <GameDetailsScreen
-      route={{ params: { gameId, fromFriendId, fromFriendName } }}
-      navigation={navigation}
-    />
+    <FloatingModalShell onClose={() => navigation.goBack()} maxWidth={1100}>
+      <GameDetailsScreen
+        route={{ params: { gameId, fromFriendId, fromFriendName } }}
+        navigation={navigation}
+      />
+    </FloatingModalShell>
   );
 }
