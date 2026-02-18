@@ -50,19 +50,9 @@ tmdbHttp.interceptors.request.use((config) => {
 igdbHttp.interceptors.request.use((config) => {
   // Web calls go through the Vercel proxy, which injects IGDB credentials server-side.
   if (isWebRuntime) {
-    // Fallback robusto para proxies que no resuelven bien rutas catch-all:
-    // enviamos el endpoint también en query (?path=games), en lugar de depender solo de /api/igdb/games.
-    const rawUrl = String(config.url || '');
-    const endpoint = rawUrl.replace(/^\/+/, '').split('?')[0];
-    if (endpoint) {
-      config.url = '/';
-      config.params = {
-        ...(config.params || {}),
-        path: endpoint,
-      };
-    }
-
     if (DEBUG_IGDB) {
+      const rawUrl = String(config.url || '');
+      const endpoint = rawUrl.replace(/^\/+/, '').split('?')[0];
       console.log('[IGDB][web][request]', {
         baseURL: config.baseURL,
         originalEndpoint: endpoint || '(empty)',
