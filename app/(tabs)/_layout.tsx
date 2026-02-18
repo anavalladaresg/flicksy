@@ -11,6 +11,26 @@ import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { supabase } from '@/src/services/supabase';
 import { getPendingFriendRequestsCount } from '@/src/services/social';
 
+// Estilos CSS para hover en web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Efectos hover para tabs en web */
+    [data-testid="tab-bar-button"] {
+      transition: all 0.2s ease !important;
+      border-radius: 12px !important;
+    }
+    [data-testid="tab-bar-button"]:hover {
+      transform: scale(1.08) translateY(-2px) !important;
+      background-color: rgba(14, 116, 144, 0.1) !important;
+    }
+    [data-testid="tab-bar-button"][aria-selected="true"]:hover {
+      background-color: rgba(14, 116, 144, 0.15) !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isWeb = Platform.OS === 'web';

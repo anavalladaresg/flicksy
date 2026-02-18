@@ -41,7 +41,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('watching');
+  const [status, setStatus] = useState<'planned' | 'completed'>('planned');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
@@ -83,9 +83,8 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     };
   }, [tvId]);
 
-  function statusLabel(value: 'planned' | 'watching' | 'completed') {
+  function statusLabel(value: 'planned' | 'completed') {
     if (value === 'planned') return 'Pendiente';
-    if (value === 'watching') return 'Viendo';
     return 'Vista';
   }
 
@@ -94,9 +93,8 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     return `${value.toFixed(1)}/10`;
   }
 
-  function statusTone(value: 'planned' | 'watching' | 'completed') {
+  function statusTone(value: 'planned' | 'completed') {
     if (value === 'planned') return { color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' };
-    if (value === 'watching') return { color: '#0369A1', bg: '#E0F2FE', border: '#7DD3FC' };
     return { color: '#15803D', bg: '#DCFCE7', border: '#86EFAC' };
   }
 
@@ -149,7 +147,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     if (!trackedTVItem) return;
     setRating(trackedTVItem.rating ?? 0);
     setStatus(
-      (trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching'
+      (trackedTVItem.status as 'planned' | 'completed') || 'planned'
     );
     setStartedAt(trackedTVItem.startedAt ?? '');
     setFinishedAt(trackedTVItem.finishedAt ?? '');
@@ -217,7 +215,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
                   removeTrackedItem(trackedTVItem.id);
                 } else {
                   setRating(0);
-                  setStatus('watching');
+                  setStatus('planned');
                   setStartedAt('');
                   setFinishedAt('');
                   setIsRatingOpen(true);
@@ -245,23 +243,23 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
                     styles.statusPill,
                     isDark && styles.statusPillDark,
                     {
-                      borderColor: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').border,
-                      backgroundColor: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').bg,
+                      borderColor: statusTone((trackedTVItem.status as 'planned' | 'completed') || 'planned').border,
+                      backgroundColor: statusTone((trackedTVItem.status as 'planned' | 'completed') || 'planned').bg,
                     },
                   ]}
                 >
                   <MaterialIcons
                     name="flag"
                     size={13}
-                    color={statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').color}
+                    color={statusTone((trackedTVItem.status as 'planned' | 'completed') || 'planned').color}
                   />
                   <Text
                     style={[
                       styles.statusPillText,
-                      { color: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').color },
+                      { color: statusTone((trackedTVItem.status as 'planned' | 'completed') || 'planned').color },
                     ]}
                   >
-                    {statusLabel((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching')}
+                    {statusLabel((trackedTVItem.status as 'planned' | 'completed') || 'planned')}
                   </Text>
                 </View>
                 <Text style={[styles.ratingLine, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>⭐️ {ratingValue(trackedTVItem.rating ?? 0)}</Text>
@@ -319,17 +317,20 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         status={status}
         statusOptions={[
           { value: 'planned', label: 'Pendiente', color: '#64748B' },
-          { value: 'watching', label: 'Viendo', color: '#0284C7' },
           { value: 'completed', label: 'Visto', color: '#16A34A' },
         ]}
         startedAt={startedAt}
         finishedAt={finishedAt}
         onChange={setRating}
-        onChangeStatus={(next) => setStatus(next as 'planned' | 'watching' | 'completed')}
+        onChangeStatus={(next) => setStatus(next as 'planned' | 'completed')}
         onChangeStartedAt={setStartedAt}
         onChangeFinishedAt={setFinishedAt}
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
+        onConfirmAndGoBack={() => {
+          setIsRatingOpen(false);
+          navigation.goBack();
+        }}
       />
     </SafeAreaView>
   );

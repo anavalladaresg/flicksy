@@ -1,8 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { create } from 'zustand/index.js';
 import { createJSONStorage, persist } from 'zustand/middleware.js';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+
+// Función para obtener el tema inicial según la plataforma
+function getInitialThemeMode(): ThemeMode {
+  if (Platform.OS === 'web') {
+    // En web, siempre empezar en modo claro por defecto
+    return 'light';
+  }
+  return 'system';
+}
 
 interface PreferencesState {
   username: string;
@@ -34,7 +44,7 @@ export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
       username: 'anavalladares',
-      themeMode: 'system',
+      themeMode: getInitialThemeMode(),
       alertsAchievements: true,
       alertsFriendRequests: true,
       alertsFriendsActivity: true,

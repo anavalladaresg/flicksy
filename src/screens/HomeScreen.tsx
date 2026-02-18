@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -60,8 +60,85 @@ function SectionRow({
   dark: boolean;
 }) {
   const router = useRouter();
+  const flatListRef = useRef<FlatList>(null);
+  const sectionRef = useRef<View>(null);
+  const scrollOffsetRef = useRef(0);
+
+  // Manejar scroll con rueda del ratón en web
+  const [isHovering, setIsHovering] = useState(false);
+  const scrollAnimationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isHovering) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Cancelar animación anterior si existe
+      if (scrollAnimationRef.current) {
+        cancelAnimationFrame(scrollAnimationRef.current);
+      }
+      
+      // Convertir scroll vertical en horizontal con factor de velocidad suave
+      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
+      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
+      
+      // Usar requestAnimationFrame para animación suave y profesional
+      const startOffset = scrollOffsetRef.current;
+      const distance = targetOffset - startOffset;
+      const duration = 350; // Duración aumentada para movimiento más suave
+      const startTime = performance.now();
+      
+      const animate = (currentTime: number) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        // Aplicar curva adicional para movimiento más natural
+        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
+        
+        scrollOffsetRef.current = startOffset + distance * smoothProgress;
+        
+        if (flatListRef.current) {
+          flatListRef.current.scrollToOffset({
+            offset: scrollOffsetRef.current,
+            animated: false,
+          });
+        }
+        
+        if (progress < 1) {
+          scrollAnimationRef.current = requestAnimationFrame(animate);
+        } else {
+          scrollAnimationRef.current = null;
+        }
+      };
+      
+      scrollAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        window.removeEventListener('wheel', handleWheel);
+        if (scrollAnimationRef.current) {
+          cancelAnimationFrame(scrollAnimationRef.current);
+        }
+      };
+    }
+  }, [isHovering]);
+
   return (
-    <View style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}>
+    <View 
+      ref={sectionRef}
+      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      {...(Platform.OS === 'web' ? { 
+        'data-section-row': true,
+        onMouseEnter: () => setIsHovering(true),
+        onMouseLeave: () => setIsHovering(false),
+      } : {})}
+    >
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>{title}</Text>
         <TouchableOpacity onPress={() => router.push(`/browse/${type}`)} style={[styles.moreButton, dark && styles.moreButtonDark]}>
@@ -69,11 +146,26 @@ function SectionRow({
         </TouchableOpacity>
       </View>
       <FlatList
+        ref={flatListRef}
         horizontal
         data={items.slice(0, ITEMS_PER_SECTION)}
         keyExtractor={(item) => item.id.toString()}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        onScroll={(event) => {
+          // Guardar el offset actual para el scroll con rueda
+          if (Platform.OS === 'web') {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.x;
+          }
+        }}
+        scrollEventThrottle={8}
+        decelerationRate="normal"
+        {...(Platform.OS === 'web' ? {
+          // Mejorar el scroll suave en web
+          style: { 
+            WebkitOverflowScrolling: 'touch' as any,
+          },
+        } : {})}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
@@ -113,21 +205,113 @@ function PersonalizedRow({
   onDismiss: (item: RecommendationItem) => void;
 }) {
   const router = useRouter();
+  const flatListRef = useRef<FlatList>(null);
+  const sectionRef = useRef<View>(null);
+  const scrollOffsetRef = useRef(0);
+
+  // Manejar scroll con rueda del ratón en web
+  const [isHovering, setIsHovering] = useState(false);
+  const scrollAnimationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isHovering) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Cancelar animación anterior si existe
+      if (scrollAnimationRef.current) {
+        cancelAnimationFrame(scrollAnimationRef.current);
+      }
+      
+      // Convertir scroll vertical en horizontal con factor de velocidad suave
+      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
+      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
+      
+      // Usar requestAnimationFrame para animación suave y profesional
+      const startOffset = scrollOffsetRef.current;
+      const distance = targetOffset - startOffset;
+      const duration = 350; // Duración aumentada para movimiento más suave
+      const startTime = performance.now();
+      
+      const animate = (currentTime: number) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        // Aplicar curva adicional para movimiento más natural
+        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
+        
+        scrollOffsetRef.current = startOffset + distance * smoothProgress;
+        
+        if (flatListRef.current) {
+          flatListRef.current.scrollToOffset({
+            offset: scrollOffsetRef.current,
+            animated: false,
+          });
+        }
+        
+        if (progress < 1) {
+          scrollAnimationRef.current = requestAnimationFrame(animate);
+        } else {
+          scrollAnimationRef.current = null;
+        }
+      };
+      
+      scrollAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        window.removeEventListener('wheel', handleWheel);
+        if (scrollAnimationRef.current) {
+          cancelAnimationFrame(scrollAnimationRef.current);
+        }
+      };
+    }
+  }, [isHovering]);
+
   if (items.length === 0) return null;
 
   return (
-    <View style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}>
+    <View 
+      ref={sectionRef}
+      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      {...(Platform.OS === 'web' ? { 
+        'data-section-row': true,
+        onMouseEnter: () => setIsHovering(true),
+        onMouseLeave: () => setIsHovering(false),
+      } : {})}
+    >
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>
           {title}
         </Text>
       </View>
       <FlatList
+        ref={flatListRef}
         horizontal
         data={items}
         keyExtractor={(item) => `${item.mediaType}-${item.id}`}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        onScroll={(event) => {
+          // Guardar el offset actual para el scroll con rueda
+          if (Platform.OS === 'web') {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.x;
+          }
+        }}
+        scrollEventThrottle={8}
+        decelerationRate="normal"
+        {...(Platform.OS === 'web' ? {
+          // Mejorar el scroll suave en web
+          style: { 
+            WebkitOverflowScrolling: 'touch' as any,
+          },
+        } : {})}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} activeOpacity={0.75} onPress={() => router.push(`/${item.mediaType}/${item.id}`)}>
             <Image
@@ -166,9 +350,85 @@ function FriendsActivityRow({
   dark: boolean;
 }) {
   const router = useRouter();
+  const flatListRef = useRef<FlatList>(null);
+  const sectionRef = useRef<View>(null);
+  const scrollOffsetRef = useRef(0);
+
+  // Manejar scroll con rueda del ratón en web
+  const [isHovering, setIsHovering] = useState(false);
+  const scrollAnimationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isHovering) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Cancelar animación anterior si existe
+      if (scrollAnimationRef.current) {
+        cancelAnimationFrame(scrollAnimationRef.current);
+      }
+      
+      // Convertir scroll vertical en horizontal con factor de velocidad suave
+      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
+      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
+      
+      // Usar requestAnimationFrame para animación suave y profesional
+      const startOffset = scrollOffsetRef.current;
+      const distance = targetOffset - startOffset;
+      const duration = 350; // Duración aumentada para movimiento más suave
+      const startTime = performance.now();
+      
+      const animate = (currentTime: number) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        // Aplicar curva adicional para movimiento más natural
+        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
+        
+        scrollOffsetRef.current = startOffset + distance * smoothProgress;
+        
+        if (flatListRef.current) {
+          flatListRef.current.scrollToOffset({
+            offset: scrollOffsetRef.current,
+            animated: false,
+          });
+        }
+        
+        if (progress < 1) {
+          scrollAnimationRef.current = requestAnimationFrame(animate);
+        } else {
+          scrollAnimationRef.current = null;
+        }
+      };
+      
+      scrollAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        window.removeEventListener('wheel', handleWheel);
+        if (scrollAnimationRef.current) {
+          cancelAnimationFrame(scrollAnimationRef.current);
+        }
+      };
+    }
+  }, [isHovering]);
 
   return (
-    <View style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}>
+    <View 
+      ref={sectionRef}
+      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      {...(Platform.OS === 'web' ? { 
+        'data-section-row': true,
+        onMouseEnter: () => setIsHovering(true),
+        onMouseLeave: () => setIsHovering(false),
+      } : {})}
+    >
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>Lo que hacen tus amigos</Text>
       </View>
@@ -178,11 +438,19 @@ function FriendsActivityRow({
         </Text>
       ) : (
         <FlatList
+          ref={flatListRef}
           horizontal
           data={items}
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          onScroll={(event) => {
+            // Guardar el offset actual para el scroll con rueda
+            if (Platform.OS === 'web') {
+              scrollOffsetRef.current = event.nativeEvent.contentOffset.x;
+            }
+          }}
+          scrollEventThrottle={16}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.friendCard, dark && styles.friendCardDark]}
