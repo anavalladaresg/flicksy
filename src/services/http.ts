@@ -12,9 +12,16 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const IGDB_CLIENT_ID = process.env.EXPO_PUBLIC_IGDB_CLIENT_ID || '';
 const IGDB_ACCESS_TOKEN = process.env.EXPO_PUBLIC_IGDB_ACCESS_TOKEN || '';
 const isWebRuntime = typeof window !== 'undefined';
-const IGDB_WEB_PROXY_URL =
-  (process.env.EXPO_PUBLIC_IGDB_PROXY_URL || '/api/igdb').replace(/\/$/, '');
+const isLocalWebRuntime =
+  isWebRuntime && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const IGDB_LOCAL_PROXY_URL = process.env.EXPO_PUBLIC_IGDB_LOCAL_PROXY_URL || 'http://127.0.0.1:8787/api/igdb';
+const IGDB_WEB_PROXY_URL = (
+  isLocalWebRuntime
+    ? IGDB_LOCAL_PROXY_URL
+    : process.env.EXPO_PUBLIC_IGDB_PROXY_URL || '/api/igdb'
+).replace(/\/$/, '');
 const IGDB_BASE_URL = isWebRuntime ? IGDB_WEB_PROXY_URL : 'https://api.igdb.com/v4';
+const DEBUG_IGDB = process.env.EXPO_PUBLIC_DEBUG_IGDB === 'true';
 
 // ============= TMDB HTTP CLIENT =============
 export const tmdbHttp: AxiosInstance = axios.create({
@@ -42,7 +49,28 @@ tmdbHttp.interceptors.request.use((config) => {
 
 igdbHttp.interceptors.request.use((config) => {
   // Web calls go through the Vercel proxy, which injects IGDB credentials server-side.
-  if (!isWebRuntime) {
+  if (isWebRuntime) {
+    // Fallback robusto para proxies que no resuelven bien rutas catch-all:
+    // enviamos el endpoint también en query (?path=games), en lugar de depender solo de /api/igdb/games.
+    const rawUrl = String(config.url || '');
+    const endpoint = rawUrl.replace(/^\/+/, '').split('?')[0];
+    if (endpoint) {
+      config.url = '/';
+      config.params = {
+        ...(config.params || {}),
+        path: endpoint,
+      };
+    }
+
+    if (DEBUG_IGDB) {
+      console.log('[IGDB][web][request]', {
+        baseURL: config.baseURL,
+        originalEndpoint: endpoint || '(empty)',
+        finalUrl: config.url,
+        params: config.params,
+      });
+    }
+  } else {
     config.headers = {
       ...config.headers,
       'Client-ID': IGDB_CLIENT_ID,
@@ -64,3 +92,25 @@ function handleError(error: unknown) {
 
 tmdbHttp.interceptors.response.use((response) => response, handleError);
 igdbHttp.interceptors.response.use((response) => response, handleError);
+
+if (DEBUG_IGDB) {
+  igdbHttp.interceptors.response.use(
+    (response) => {
+      console.log('[IGDB][response]', {
+        status: response.status,
+        requestUrl: response.config?.baseURL + String(response.config?.url || ''),
+        requestParams: response.config?.params,
+      });
+      return response;
+    },
+    (error) => {
+      console.log('[IGDB][response][error]', {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        requestUrl: error?.config?.baseURL + String(error?.config?.url || ''),
+        requestParams: error?.config?.params,
+      });
+      return Promise.reject(error);
+    }
+  );
+}

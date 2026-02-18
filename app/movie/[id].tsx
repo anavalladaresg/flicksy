@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 
+import FloatingModalShell from '@/src/components/common/FloatingModalShell';
 import MovieDetailsScreen from '@/src/screens/MovieDetailsScreen';
 
 export default function MovieDetailsRoute() {
@@ -12,9 +13,11 @@ export default function MovieDetailsRoute() {
   const movieId = Number(id);
 
   return (
-    <MovieDetailsScreen
-      route={{ params: { movieId, fromFriendId, fromFriendName } }}
-      navigation={navigation}
-    />
+    <FloatingModalShell onClose={() => navigation.goBack()} maxWidth={1100}>
+      <MovieDetailsScreen
+        route={{ params: { movieId, fromFriendId, fromFriendName } }}
+        navigation={navigation}
+      />
+    </FloatingModalShell>
   );
 }

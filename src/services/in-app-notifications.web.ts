@@ -43,28 +43,49 @@ function getCurrentTheme(): 'light' | 'dark' {
 }
 
 // Función helper para obtener opciones de estilo según el tema
-function getNotificationOptions(isDark: boolean) {
+function getNotificationOptions(kind: NotifyKind, isDark: boolean) {
   const fontFamily = Fonts.web?.sans || "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-  
+  const palette = (() => {
+    if (kind === 'success') {
+      return isDark
+        ? { fill: '#052E1B', title: '#DCFCE7', description: '#BBF7D0', accent: '#22C55E' }
+        : { fill: '#ECFDF3', title: '#14532D', description: '#166534', accent: '#16A34A' };
+    }
+    if (kind === 'error') {
+      return isDark
+        ? { fill: '#3B0A0A', title: '#FEE2E2', description: '#FECACA', accent: '#EF4444' }
+        : { fill: '#FEF2F2', title: '#7F1D1D', description: '#991B1B', accent: '#DC2626' };
+    }
+    if (kind === 'warning') {
+      return isDark
+        ? { fill: '#3B2A03', title: '#FEF3C7', description: '#FDE68A', accent: '#F59E0B' }
+        : { fill: '#FFFBEB', title: '#78350F', description: '#92400E', accent: '#D97706' };
+    }
+    return isDark
+      ? { fill: '#082F49', title: '#E0F2FE', description: '#BAE6FD', accent: '#0EA5E9' }
+      : { fill: '#F0F9FF', title: '#0C4A6E', description: '#075985', accent: '#0284C7' };
+  })();
+
   return {
     autopilot: {
       expand: 500,
       collapse: 3000,
     },
-    fill: isDark ? '#111827' : '#FFFFFF',
+    fill: palette.fill,
     roundness: 16,
     styles: {
-      title: `font-family: ${fontFamily} !important; font-weight: 700 !important; font-size: 15px !important; ${isDark ? 'color: #E5E7EB !important;' : 'color: #0F172A !important;'}`,
-      description: `font-family: ${fontFamily} !important; font-weight: 500 !important; font-size: 14px !important; ${isDark ? 'color: #CBD5E1 !important;' : 'color: #64748B !important;'}`,
-      badge: isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important;',
-      button: `${isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important; color: #E5E7EB !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important; color: #0F172A !important;'} font-family: ${fontFamily} !important; font-weight: 600 !important;`,
+      title: `font-family: ${fontFamily} !important; font-weight: 800 !important; font-size: 15px !important; line-height: 1.25 !important; color: ${palette.title} !important; text-align: center !important; width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; margin: 0 !important; padding: 0 !important;`,
+      description: `font-family: ${fontFamily} !important; font-weight: 600 !important; font-size: 13px !important; line-height: 1.3 !important; color: ${palette.description} !important; text-align: center !important; width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; margin: 0 !important; padding: 0 !important;`,
+      badge: `background-color: ${palette.accent} !important;`,
+      button: `background-color: ${palette.accent}22 !important; color: ${palette.title} !important; font-family: ${fontFamily} !important; font-weight: 700 !important;`,
+      container: `border: 1px solid ${palette.accent}55 !important; box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24) !important;`,
     },
   };
 }
 
 export function showInAppNotification(kind: NotifyKind, title: string, description?: string) {
   const isDark = getCurrentTheme() === 'dark';
-  const options = getNotificationOptions(isDark);
+  const options = getNotificationOptions(kind, isDark);
   const payload = { 
     title, 
     description,
