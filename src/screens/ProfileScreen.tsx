@@ -384,6 +384,14 @@ function ProfileScreen() {
               <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
             </TouchableOpacity>
           ) : null}
+          <TouchableOpacity
+            style={[styles.testNotificationButton, isDark && styles.testNotificationButtonDark]}
+            onPress={() => {
+              showInAppNotification('success', 'Notificación de prueba', 'Esta es una notificación de éxito usando Sileo');
+            }}
+          >
+            <Text style={styles.testNotificationButtonText}>Probar notificación</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark]}>
@@ -714,6 +722,25 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  testNotificationButton: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0E7490',
+    backgroundColor: '#ECFEFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  testNotificationButtonDark: {
+    borderColor: '#0E7490',
+    backgroundColor: '#0F172A',
+  },
+  testNotificationButtonText: {
+    color: '#0E7490',
     fontSize: 12,
     fontWeight: '800',
   },

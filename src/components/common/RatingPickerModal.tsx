@@ -4,6 +4,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   Modal,
   PanResponder,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -34,6 +35,7 @@ interface RatingPickerModalProps {
   onChangeFinishedAt: (value: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onConfirmAndGoBack?: () => void;
 }
 
 function iconNameFor(value: number, starIndex: number): 'star' | 'star-half' | 'star-border' {
@@ -59,6 +61,7 @@ function RatingPickerModal({
   onChangeFinishedAt,
   onCancel,
   onConfirm,
+  onConfirmAndGoBack,
 }: RatingPickerModalProps) {
   const isDark = useColorScheme() === 'dark';
   const [starsWidth, setStarsWidth] = useState(0);
@@ -78,6 +81,26 @@ function RatingPickerModal({
     const timer = setTimeout(measureTrack, 0);
     return () => clearTimeout(timer);
   }, [measureTrack, visible]);
+
+  // Manejar scroll con rueda del ratón en web
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') return;
+    
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement;
+      // Buscar el contenedor del modal o el track de estrellas
+      const modalContainer = target.closest('[data-stars-container]') || target.closest('[data-stars-track]');
+      if (modalContainer && starsTrackRef.current) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.5 : 0.5;
+        const newValue = Math.max(0, Math.min(10, valueRef.current + delta));
+        onChange(newValue);
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [visible, onChange]);
 
   const ratingFromTouchX = useCallback((pageX: number) => {
     if (starsWidth <= 0) return valueRef.current || 0;
@@ -110,7 +133,10 @@ function RatingPickerModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, isDark && styles.sheetDark]}>
+        <View 
+          style={[styles.sheet, isDark && styles.sheetDark]} 
+          {...(Platform.OS === 'web' ? { 'data-stars-container': true } : {})}
+        >
           <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Valora: {title}</Text>
 
           <View style={styles.statusBlock}>
@@ -144,6 +170,7 @@ function RatingPickerModal({
             <View
               ref={starsTrackRef}
               style={styles.starsTrack}
+              {...(Platform.OS === 'web' ? { 'data-stars-track': true } : {})}
               onLayout={(event) => {
                 setStarsWidth(event.nativeEvent.layout.width);
                 measureTrack();
@@ -199,7 +226,15 @@ function RatingPickerModal({
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.confirmButton, hasInvalidRange && styles.confirmButtonDisabled]}
-              onPress={onConfirm}
+              onPress={() => {
+                onConfirm();
+                if (onConfirmAndGoBack) {
+                  // Pequeño delay para que se guarde antes de navegar
+                  setTimeout(() => {
+                    onConfirmAndGoBack();
+                  }, 100);
+                }
+              }}
               disabled={hasInvalidRange}
             >
               <Text style={styles.confirmText}>Guardar</Text>
@@ -216,12 +251,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 16,
   },
   sheet: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 420,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+    }),
   },
   sheetDark: {
     backgroundColor: '#111827',

@@ -1,0 +1,102 @@
+// Importación estática de Sileo para web
+import { sileo } from 'sileo';
+import { Fonts } from '@/constants/theme';
+import { usePreferencesStore } from '@/src/store/preferences';
+
+type NotifyKind = 'success' | 'error' | 'warning' | 'info';
+
+// Función helper para obtener el tema actual desde el store
+function getCurrentTheme(): 'light' | 'dark' {
+  try {
+    const themeMode = usePreferencesStore.getState().themeMode;
+    
+    if (themeMode === 'dark') return 'dark';
+    if (themeMode === 'light') return 'light';
+    
+    // Si es 'system', verificar preferencia del sistema
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return prefersDark ? 'dark' : 'light';
+    }
+    
+    return 'light';
+  } catch {
+    // Fallback: verificar el DOM
+    if (typeof window === 'undefined') return 'light';
+    
+    const html = document.documentElement;
+    const body = document.body;
+    
+    if (html.classList.contains('dark') || body.classList.contains('dark')) {
+      return 'dark';
+    }
+    
+    const computedStyle = window.getComputedStyle(body);
+    const bgColor = computedStyle.backgroundColor;
+    
+    if (bgColor && (bgColor.includes('rgb(11, 18, 32)') || bgColor.includes('rgb(17, 24, 39)'))) {
+      return 'dark';
+    }
+    
+    return 'light';
+  }
+}
+
+// Función helper para obtener opciones de estilo según el tema
+function getNotificationOptions(isDark: boolean) {
+  const fontFamily = Fonts.web?.sans || "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  
+  return {
+    autopilot: {
+      expand: 500,
+      collapse: 3000,
+    },
+    fill: isDark ? '#111827' : '#FFFFFF',
+    roundness: 16,
+    styles: {
+      title: `font-family: ${fontFamily} !important; font-weight: 700 !important; font-size: 15px !important; ${isDark ? 'color: #E5E7EB !important;' : 'color: #0F172A !important;'}`,
+      description: `font-family: ${fontFamily} !important; font-weight: 500 !important; font-size: 14px !important; ${isDark ? 'color: #CBD5E1 !important;' : 'color: #64748B !important;'}`,
+      badge: isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important;',
+      button: `${isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important; color: #E5E7EB !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important; color: #0F172A !important;'} font-family: ${fontFamily} !important; font-weight: 600 !important;`,
+    },
+  };
+}
+
+export function showInAppNotification(kind: NotifyKind, title: string, description?: string) {
+  const isDark = getCurrentTheme() === 'dark';
+  const options = getNotificationOptions(isDark);
+  const payload = { 
+    title, 
+    description,
+    ...options,
+  };
+  
+  try {
+    switch (kind) {
+      case 'success':
+        sileo.success(payload);
+        return;
+      case 'error':
+        sileo.error(payload);
+        return;
+      case 'warning':
+        sileo.warning(payload);
+        return;
+      case 'info':
+        sileo.info(payload);
+        return;
+      default:
+        // Fallback seguro usando sileo.show()
+        sileo.show(payload);
+        return;
+    }
+  } catch (error) {
+    console.error('Error al mostrar notificación Sileo:', error);
+    console.log(`[notify:${kind}] ${title}${description ? ` - ${description}` : ''}`);
+  }
+}
+
+export async function requestWebNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.requestPermission();
+}

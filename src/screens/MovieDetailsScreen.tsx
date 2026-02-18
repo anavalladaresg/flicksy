@@ -41,7 +41,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('watching');
+  const [status, setStatus] = useState<'planned' | 'completed'>('planned');
   const [watchedAt, setWatchedAt] = useState('');
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
@@ -82,9 +82,8 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     };
   }, [movieId]);
 
-  function statusLabel(value: 'planned' | 'watching' | 'completed') {
+  function statusLabel(value: 'planned' | 'completed') {
     if (value === 'planned') return 'Pendiente';
-    if (value === 'watching') return 'Viendo';
     return 'Vista';
   }
 
@@ -93,9 +92,8 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     return `${value.toFixed(1)}/10`;
   }
 
-  function statusTone(value: 'planned' | 'watching' | 'completed') {
+  function statusTone(value: 'planned' | 'completed') {
     if (value === 'planned') return { color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' };
-    if (value === 'watching') return { color: '#0369A1', bg: '#E0F2FE', border: '#7DD3FC' };
     return { color: '#15803D', bg: '#DCFCE7', border: '#86EFAC' };
   }
 
@@ -150,7 +148,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     if (!trackedMovieItem) return;
     setRating(trackedMovieItem.rating ?? 0);
     setStatus(
-      (trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching'
+      (trackedMovieItem.status as 'planned' | 'completed') || 'planned'
     );
     setWatchedAt(trackedMovieItem.watchedAt ?? '');
     setIsRatingOpen(true);
@@ -217,7 +215,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
                   removeTrackedItem(trackedMovieItem.id);
                 } else {
                   setRating(0);
-                  setStatus('watching');
+                  setStatus('planned');
                   setWatchedAt('');
                   setIsRatingOpen(true);
                 }
@@ -244,23 +242,23 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
                     styles.statusPill,
                     isDark && styles.statusPillDark,
                     {
-                      borderColor: statusTone((trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching').border,
-                      backgroundColor: statusTone((trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching').bg,
+                      borderColor: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').border,
+                      backgroundColor: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').bg,
                     },
                   ]}
                 >
                   <MaterialIcons
                     name="flag"
                     size={13}
-                    color={statusTone((trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching').color}
+                    color={statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').color}
                   />
                   <Text
                     style={[
                       styles.statusPillText,
-                      { color: statusTone((trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching').color },
+                      { color: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').color },
                     ]}
                   >
-                    {statusLabel((trackedMovieItem.status as 'planned' | 'watching' | 'completed') || 'watching')}
+                    {statusLabel((trackedMovieItem.status as 'planned' | 'completed') || 'planned')}
                   </Text>
                 </View>
                 <Text style={[styles.ratingLine, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>⭐️ {ratingValue(trackedMovieItem.rating ?? 0)}</Text>
@@ -316,7 +314,6 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         status={status}
         statusOptions={[
           { value: 'planned', label: 'Pendiente', color: '#64748B' },
-          { value: 'watching', label: 'Viendo', color: '#0284C7' },
           { value: 'completed', label: 'Visto', color: '#16A34A' },
         ]}
         dateMode="single"
@@ -324,12 +321,16 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         startedAt=""
         finishedAt=""
         onChange={setRating}
-        onChangeStatus={(next) => setStatus(next as 'planned' | 'watching' | 'completed')}
+        onChangeStatus={(next) => setStatus(next as 'planned' | 'completed')}
         onChangeWatchedAt={setWatchedAt}
         onChangeStartedAt={() => undefined}
         onChangeFinishedAt={() => undefined}
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
+        onConfirmAndGoBack={() => {
+          setIsRatingOpen(false);
+          navigation.goBack();
+        }}
       />
     </SafeAreaView>
   );
