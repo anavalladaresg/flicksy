@@ -16,6 +16,7 @@ import {
     View,
 } from 'react-native';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
+import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useMovieDetails } from '../features/movies/presentation/hooks';
@@ -278,14 +279,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
               </Text>
             </View>
           )}
-          {visibleFriendsRatings.length > 0 && (
-            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
-              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-                {visibleFriendsRatings[0].friendName} ha puntuado esta película con {visibleFriendsRatings[0].rating.toFixed(1)} ⭐️
-                {visibleFriendsRatings.length > 1 ? ` · +${visibleFriendsRatings.length - 1} amigo(s)` : ''}.
-              </Text>
-            </View>
-          )}
+          <FriendsRatingsBlock itemLabel="película" ratings={visibleFriendsRatings} />
 
           <View style={styles.info}>
             {movie.runtime && (

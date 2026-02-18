@@ -16,6 +16,7 @@ import {
     View,
 } from 'react-native';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
+import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { useGameDetails } from '../features/games/presentation/hooks';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
@@ -289,14 +290,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
               </Text>
             </View>
           )}
-          {visibleFriendsRatings.length > 0 && (
-            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
-              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-                {visibleFriendsRatings[0].friendName} ha puntuado este juego con {visibleFriendsRatings[0].rating.toFixed(1)} ⭐️
-                {visibleFriendsRatings.length > 1 ? ` · +${visibleFriendsRatings.length - 1} amigo(s)` : ''}.
-              </Text>
-            </View>
-          )}
+          <FriendsRatingsBlock itemLabel="juego" ratings={visibleFriendsRatings} />
 
           <View style={styles.info}>
             {game.rating && (
