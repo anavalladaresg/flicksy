@@ -11,6 +11,7 @@ import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { CLERK_PUBLISHABLE_KEY, isClerkConfigured } from '../src/services/clerk';
+import { clerkEsLocalization } from '../src/services/clerk-localization';
 import { configureNotifications, registerPushToken } from '../src/services/notifications';
 import { saveOwnPushToken } from '../src/services/social';
 import { useTrackingStore } from '../src/store/tracking';
@@ -25,14 +26,14 @@ export default function RootLayout() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B1220', paddingHorizontal: 20 }}>
         <Text style={{ color: '#E5E7EB', fontSize: 14, textAlign: 'center' }}>
-          Missing Clerk config. Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY.
+          Falta la configuración de Clerk. Añade EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY.
         </Text>
       </View>
     );
   }
 
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache} localization={clerkEsLocalization as any}>
       <RootLayoutContent />
     </ClerkProvider>
   );

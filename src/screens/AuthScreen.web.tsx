@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SignIn, SignUp } from '@clerk/clerk-expo/web';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import GridMotionBackground from '@/src/components/common/GridMotionBackground.web';
+import { clerkEsLocalization } from '@/src/services/clerk-localization';
 
 type AuthMode = 'login' | 'register';
 
@@ -10,7 +10,7 @@ export default function AuthScreenWeb() {
   // Forzar modo oscuro para el auth
   const isDark = true;
   const [mode, setMode] = useState<AuthMode>('login');
-  const clerkAppearance = {
+    const clerkAppearance = {
     baseTheme: 'dark' as any,
     variables: {
       colorPrimary: '#0E7490',
@@ -99,6 +99,12 @@ export default function AuthScreenWeb() {
         color: '#94A3B8',
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
       },
+      footer: {
+        display: 'none',
+      },
+      footerAction: {
+        display: 'none',
+      },
     },
   } as const;
 
@@ -114,7 +120,9 @@ export default function AuthScreenWeb() {
       >
         <View style={[styles.hero, isDark && styles.heroDark]}>
           <Text style={[styles.brand, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Flicksy</Text>
-          <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Tu catálogo de pelis, series y juegos</Text>
+          <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
+            Descubre, guarda y comparte tus pelis, series y juegos favoritos.
+          </Text>
         </View>
 
         <View style={styles.toggleRow}>
@@ -122,18 +130,22 @@ export default function AuthScreenWeb() {
             style={[styles.toggleButton, mode === 'login' && styles.toggleButtonActive]}
             onPress={() => setMode('login')}
           >
-            <Text style={[styles.toggleText, mode === 'login' && styles.toggleTextActive]}>Sign in</Text>
+            <Text style={[styles.toggleText, mode === 'login' && styles.toggleTextActive]}>Entrar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleButton, mode === 'register' && styles.toggleButtonActive]}
             onPress={() => setMode('register')}
           >
-            <Text style={[styles.toggleText, mode === 'register' && styles.toggleTextActive]}>Sign up</Text>
+            <Text style={[styles.toggleText, mode === 'register' && styles.toggleTextActive]}>Crear cuenta</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.clerkWebWrap}>
-          {mode === 'login' ? <SignIn appearance={clerkAppearance as any} /> : <SignUp appearance={clerkAppearance as any} />}
+          {mode === 'login' ? (
+            <SignIn appearance={clerkAppearance as any} localization={clerkEsLocalization as any} />
+          ) : (
+            <SignUp appearance={clerkAppearance as any} localization={clerkEsLocalization as any} />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -141,7 +153,7 @@ export default function AuthScreenWeb() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, position: 'relative', overflow: 'hidden' },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
