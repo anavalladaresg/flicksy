@@ -24,8 +24,8 @@ import { useTrackingStore } from '../store/tracking';
 import { Game, MediaType, Movie, TVShow, TrackedItem } from '../types';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
-const ITEMS_PER_SECTION = 10;
-const RECOMMENDATION_ITEMS = 10;
+const ITEMS_PER_SECTION = 30;
+const RECOMMENDATION_ITEMS = 30;
 const SAFE_RATIO = 0.8;
 
 type CardItem = { id: number; name: string; imageUrl: string | null; rating?: number };
@@ -210,40 +210,49 @@ function HomeScreen() {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [friendsActivity, setFriendsActivity] = useState<FriendActivityItem[]>([]);
   const moviesQuery = useMoviesBySort('vote_count.desc', 1);
+  const moviesQueryPage2 = useMoviesBySort('vote_count.desc', 2);
   const tvQuery = useTVShowsBySort('vote_count.desc', 1);
-  const gamesQuery = useGamesBySort('rating_count.desc', 1, !isWeb);
+  const tvQueryPage2 = useTVShowsBySort('vote_count.desc', 2);
+  const gamesQuery = useGamesBySort('rating_count.desc', 1);
+  const gamesQueryPage2 = useGamesBySort('rating_count.desc', 2);
 
   const movies = useMemo(
     () =>
-      (moviesQuery.data?.data ?? []).map((movie: Movie) => ({
+      ([...(moviesQuery.data?.data ?? []), ...(moviesQueryPage2.data?.data ?? [])] as Movie[])
+        .slice(0, ITEMS_PER_SECTION)
+        .map((movie: Movie) => ({
         id: movie.id,
         name: movie.title,
         imageUrl: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
         rating: movie.vote_average,
       })),
-    [moviesQuery.data]
+    [moviesQuery.data, moviesQueryPage2.data]
   );
 
   const tvShows = useMemo(
     () =>
-      (tvQuery.data?.data ?? []).map((show: TVShow) => ({
+      ([...(tvQuery.data?.data ?? []), ...(tvQueryPage2.data?.data ?? [])] as TVShow[])
+        .slice(0, ITEMS_PER_SECTION)
+        .map((show: TVShow) => ({
         id: show.id,
         name: show.name,
         imageUrl: show.poster_path ? `${TMDB_IMAGE_BASE_URL}${show.poster_path}` : null,
         rating: show.vote_average,
       })),
-    [tvQuery.data]
+    [tvQuery.data, tvQueryPage2.data]
   );
 
   const games = useMemo(
     () =>
-      (gamesQuery.data?.data ?? []).map((game: Game) => ({
+      ([...(gamesQuery.data?.data ?? []), ...(gamesQueryPage2.data?.data ?? [])] as Game[])
+        .slice(0, ITEMS_PER_SECTION)
+        .map((game: Game) => ({
         id: game.id,
         name: game.name,
         imageUrl: toGameImageUrl(game),
         rating: game.rating,
       })),
-    [gamesQuery.data]
+    [gamesQuery.data, gamesQueryPage2.data]
   );
 
   const personalized = useMemo<{ safe: RecommendationItem[]; discovery: RecommendationItem[] }>(() => {
@@ -287,6 +296,7 @@ function HomeScreen() {
     };
 
     const recommendations: RecommendationItem[] = [];
+    const perTypeTake = Math.max(10, Math.ceil(RECOMMENDATION_ITEMS / Math.max(1, typePriority.length)) * 2);
     for (const type of typePriority) {
       const baseReason =
         favoriteByType[type]?.rating && (favoriteByType[type]?.rating ?? 0) >= 7
@@ -295,7 +305,7 @@ function HomeScreen() {
             ? `Basado en tu ${type === 'game' ? 'actividad de juegos' : type === 'tv' ? 'actividad de series' : 'actividad de películas'}`
             : 'Basado en tu biblioteca';
 
-      const top = byTypeCandidates[type].slice(0, 4).map((item) => ({
+      const top = byTypeCandidates[type].slice(0, perTypeTake).map((item) => ({
         ...item,
         mediaType: type,
         reason: baseReason,
@@ -315,8 +325,14 @@ function HomeScreen() {
     return { safe, discovery };
   }, [trackedItems, movies, tvShows, games, dismissedRecommendationKeys]);
 
-  const isLoading = moviesQuery.isLoading || tvQuery.isLoading || gamesQuery.isLoading;
-  const allFailed = moviesQuery.isError && tvQuery.isError && (isWeb || gamesQuery.isError);
+  const isLoading =
+    moviesQuery.isLoading ||
+    moviesQueryPage2.isLoading ||
+    tvQuery.isLoading ||
+    tvQueryPage2.isLoading ||
+    gamesQuery.isLoading ||
+    gamesQueryPage2.isLoading;
+  const allFailed = moviesQuery.isError && tvQuery.isError && gamesQuery.isError;
 
   useEffect(() => {
     if (!feedbackMessage) return;
@@ -360,14 +376,14 @@ function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}> 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb]}>
         <View style={[styles.hero, isDark && styles.heroDark]}>
           <View style={styles.heroGlowA} />
           <View style={styles.heroGlowB} />
           <Text style={[styles.heroTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Flicksy</Text>
           <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Lo más popular del catálogo mundial</Text>
           <Text style={[styles.heroHint, { color: isDark ? '#93C5FD' : '#0369A1' }]}>
-            Recomendaciones personalizadas + tendencias globales
+            🎬 Películas · 📺 Series · 🎮 Juegos en un solo lugar
           </Text>
         </View>
 
@@ -406,11 +422,7 @@ function HomeScreen() {
           <SectionRow title="Series más vistas" type="tv" items={tvShows} dark={isDark} />
         )}
 
-        {isWeb ? (
-          <Text style={styles.sectionError}>
-            Videojuegos (IGDB) no disponibles en web por CORS. Pruébalo en iOS/Android.
-          </Text>
-        ) : gamesQuery.isError ? (
+        {gamesQuery.isError ? (
           <Text style={styles.sectionError}>No se pudieron cargar videojuegos.</Text>
         ) : (
           <SectionRow title="Juegos más jugados" type="game" items={games} dark={isDark} />
@@ -434,6 +446,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 28,
+  },
+  scrollContentWeb: {
+    width: '100%',
+    maxWidth: 1240,
+    alignSelf: 'center',
   },
   centered: {
     flex: 1,

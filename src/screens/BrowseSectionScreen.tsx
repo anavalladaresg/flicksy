@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -100,7 +99,6 @@ interface BrowseSectionScreenProps {
 
 function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const router = useRouter();
-  const isWeb = Platform.OS === 'web';
 
   const [movieSort, setMovieSort] = useState<MovieSortOption>('popularity.desc');
   const [tvSort, setTVSort] = useState<TVSortOption>('popularity.desc');
@@ -112,7 +110,7 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
 
   const movieQuery = useMoviesBySort(movieSort, page, type === 'movie');
   const tvQuery = useTVShowsBySort(tvSort, page, type === 'tv');
-  const gameQuery = useGamesBySort(gameSort, page, type === 'game' && !isWeb);
+  const gameQuery = useGamesBySort(gameSort, page, type === 'game');
 
   const activeQuery = type === 'movie' ? movieQuery : type === 'tv' ? tvQuery : gameQuery;
 
@@ -138,17 +136,6 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const sortOptions = useMemo(() => {
     return type === 'movie' ? MOVIE_SORTS : type === 'tv' ? TV_SORTS : GAME_SORTS;
   }, [type]);
-
-  if (type === 'game' && isWeb) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <Text style={styles.errorTitle}>Videojuegos no disponibles en web</Text>
-        <Text style={styles.errorSubtitle}>
-          IGDB requiere backend/proxy por CORS y seguridad de credenciales.
-        </Text>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>

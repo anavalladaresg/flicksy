@@ -4,6 +4,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getClerkInstance } from '@clerk/clerk-expo';
 import { create } from 'zustand/index.js';
 import { createJSONStorage, persist } from 'zustand/middleware.js';
 import { STORAGE_KEYS } from '../constants/config';
@@ -95,11 +96,10 @@ function trackedItemToUpsert(item: TrackedItem, userId: string): RemoteTrackedUp
 }
 
 async function getUserId(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData.session?.user?.id) return sessionData.session.user.id;
-  const { data: userData } = await supabase.auth.getUser();
-  return userData.user?.id ?? null;
+  const clerk = getClerkInstance();
+  const clerkUserId = clerk.user?.id ?? null;
+  if (clerkUserId) return clerkUserId;
+  return null;
 }
 
 function minimalUpsertPayload(item: TrackedItem, userId: string) {

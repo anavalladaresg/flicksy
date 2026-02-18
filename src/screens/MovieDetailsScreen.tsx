@@ -18,7 +18,6 @@ import {
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
-import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useMovieDetails } from '../features/movies/presentation/hooks';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
@@ -200,7 +199,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
           <View style={styles.backdropWrap}>
             <Image
               source={{
-                uri: `${TMDB_IMAGE_BASE_URL}${movie.backdrop_path || movie.poster_path}`,
+                uri: `https://image.tmdb.org/t/p/original${movie.backdrop_path || movie.poster_path}`,
               }}
               style={styles.backdrop}
               resizeMode="cover"

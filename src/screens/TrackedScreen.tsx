@@ -3,10 +3,12 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
+  Dimensions,
   Image,
   Modal,
   PanResponder,
   Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -171,6 +173,8 @@ function TrackedScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
   const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortButtonRef = useRef<View | null>(null);
+  const [sortMenuPosition, setSortMenuPosition] = useState({ top: 0, left: 0 });
 
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
   const [editingStatus, setEditingStatus] = useState<TrackedItem['status']>('planned');
@@ -285,6 +289,20 @@ function TrackedScreen() {
     return `Inicio: ${start} · Fin: ${end}`;
   }
 
+  function toggleSortMenu() {
+    if (isWeb && !isSortOpen) {
+      sortButtonRef.current?.measureInWindow((x, y, width, height) => {
+        const menuWidth = 170;
+        const screenWidth = Dimensions.get('window').width;
+        const left = Math.max(8, Math.min(screenWidth - menuWidth - 8, x + width - menuWidth));
+        setSortMenuPosition({ top: y + height + 6, left });
+        setIsSortOpen(true);
+      });
+      return;
+    }
+    setIsSortOpen((prev) => !prev);
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
@@ -322,12 +340,12 @@ function TrackedScreen() {
               </TouchableOpacity>
             </ScrollView>
 
-            <View style={styles.sortAnchor}>
-              <TouchableOpacity style={styles.sortButton} onPress={() => setIsSortOpen((prev) => !prev)}>
+            <View style={styles.sortAnchor} ref={sortButtonRef}>
+              <TouchableOpacity style={styles.sortButton} onPress={toggleSortMenu}>
                 <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color="#0F172A" />
               </TouchableOpacity>
 
-              {isSortOpen && (
+              {isSortOpen && !isWeb && (
                 <View style={styles.sortMenu}>
                   {SORT_OPTIONS.map((option) => {
                     const active = sortBy === option.value;
@@ -350,6 +368,31 @@ function TrackedScreen() {
             </View>
           </View>
         </View>
+
+        {isWeb && isSortOpen && (
+          <Modal visible transparent animationType="none" onRequestClose={() => setIsSortOpen(false)}>
+            <Pressable style={styles.sortOverlay} onPress={() => setIsSortOpen(false)}>
+              <View style={[styles.sortMenu, styles.sortMenuFloating, { top: sortMenuPosition.top, left: sortMenuPosition.left }]}>
+                {SORT_OPTIONS.map((option) => {
+                  const active = sortBy === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[styles.sortMenuItem, active && styles.sortMenuItemActive]}
+                      onPress={() => {
+                        setSortBy(option.value);
+                        setIsSortOpen(false);
+                      }}
+                    >
+                      <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
+                      <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Pressable>
+          </Modal>
+        )}
 
         {filtered.length === 0 ? (
           <View style={styles.empty}>
@@ -532,12 +575,16 @@ const styles = StyleSheet.create({
   controls: {
     gap: 8,
     marginBottom: 10,
+    position: 'relative',
+    zIndex: 60,
+    elevation: 12,
   },
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
+    zIndex: 60,
   },
   filtersRow: {
     paddingVertical: 4,
@@ -589,6 +636,7 @@ const styles = StyleSheet.create({
   },
   sortAnchor: {
     position: 'relative',
+    zIndex: 80,
   },
   sortButton: {
     borderWidth: 1,
@@ -605,13 +653,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 40,
     right: 0,
-    width: 150,
+    width: 170,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     overflow: 'hidden',
-    zIndex: 20,
+    zIndex: 120,
+    elevation: 20,
+  },
+  sortMenuFloating: {
+    top: 0,
+    right: 'auto',
+    left: 0,
+  },
+  sortOverlay: {
+    flex: 1,
   },
   sortMenuItem: {
     flexDirection: 'row',
@@ -655,6 +712,7 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+    zIndex: 1,
   },
   statusSeparator: {
     height: 1,

@@ -18,7 +18,6 @@ import {
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
-import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useTVShowDetails } from '../features/tv/presentation/hooks';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
@@ -200,7 +199,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
           <View style={styles.backdropWrap}>
             <Image
               source={{
-                uri: `${TMDB_IMAGE_BASE_URL}${show.backdrop_path || show.poster_path}`,
+                uri: `https://image.tmdb.org/t/p/original${show.backdrop_path || show.poster_path}`,
               }}
               style={styles.backdrop}
               resizeMode="cover"

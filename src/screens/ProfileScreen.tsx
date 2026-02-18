@@ -1,8 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useClerk, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { Modal, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
@@ -23,6 +24,7 @@ import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
 import { sendLocalNotification } from '../services/notifications';
+import { requestWebNotificationPermission, showInAppNotification } from '../services/in-app-notifications';
 
 function averageRating(items: TrackedItem[], type: MediaType): number {
   const filtered = items.filter((item) => item.mediaType === type && typeof item.rating === 'number');
@@ -71,11 +73,19 @@ function isCurrentMonth(iso?: string): boolean {
 function ProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
+  const { signOut } = useClerk();
+  const { user } = useUser();
   const username = usePreferencesStore((state) => state.username);
   const themeMode = usePreferencesStore((state) => state.themeMode);
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
+  const alertsAchievements = usePreferencesStore((state) => state.alertsAchievements);
+  const alertsFriendRequests = usePreferencesStore((state) => state.alertsFriendRequests);
+  const alertsFriendsActivity = usePreferencesStore((state) => state.alertsFriendsActivity);
   const alertsNewSeason = usePreferencesStore((state) => state.alertsNewSeason);
   const alertsUpcomingRelease = usePreferencesStore((state) => state.alertsUpcomingRelease);
+  const setAlertsAchievements = usePreferencesStore((state) => state.setAlertsAchievements);
+  const setAlertsFriendRequests = usePreferencesStore((state) => state.setAlertsFriendRequests);
+  const setAlertsFriendsActivity = usePreferencesStore((state) => state.setAlertsFriendsActivity);
   const setAlertsNewSeason = usePreferencesStore((state) => state.setAlertsNewSeason);
   const setAlertsUpcomingRelease = usePreferencesStore((state) => state.setAlertsUpcomingRelease);
   const monthlyMovieGoal = usePreferencesStore((state) => state.monthlyMovieGoal);
@@ -85,16 +95,19 @@ function ProfileScreen() {
   const markAchievementSeen = usePreferencesStore((state) => state.markAchievementSeen);
   const trackedItems = useTrackingStore((state) => state.items);
   const darkEnabled = themeMode === 'dark';
-  const isWeb = typeof window !== 'undefined';
+  const isWeb = Platform.OS === 'web';
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
-  const [nameDraft, setNameDraft] = useState(username);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const emailAddress = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+  const computedUsername = (emailAddress.split('@')[0] || username || 'usuario').toLowerCase();
+  const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || computedUsername;
+  const [nameDraft, setNameDraft] = useState(computedUsername);
   const [nameSaving, setNameSaving] = useState(false);
   const [friendsQuery, setFriendsQuery] = useState('');
   const [friendResults, setFriendResults] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
   const [friendMessage, setFriendMessage] = useState('');
-  const [achievementToast, setAchievementToast] = useState('');
 
   const movieIds = useMemo(
     () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'movie').map((item) => item.externalId))).slice(0, 20),
@@ -271,20 +284,17 @@ function ProfileScreen() {
   useEffect(() => {
     const newlyUnlocked = achievements.find((achievement) => achievement.unlocked && !seenAchievementIds.includes(achievement.id));
     if (!newlyUnlocked) return;
-    setAchievementToast(`Logro desbloqueado: ${newlyUnlocked.label}`);
+    if (alertsAchievements) {
+      showInAppNotification('success', 'Logro desbloqueado', newlyUnlocked.label);
+    }
     markAchievementSeen(newlyUnlocked.id);
-  }, [achievements, markAchievementSeen, seenAchievementIds]);
-
-  useEffect(() => {
-    if (!achievementToast) return;
-    const timer = setTimeout(() => setAchievementToast(''), 2600);
-    return () => clearTimeout(timer);
-  }, [achievementToast]);
+  }, [achievements, alertsAchievements, markAchievementSeen, seenAchievementIds]);
 
   useEffect(() => {
     let cancelled = false;
     const refreshFriendsData = async () => {
-      await syncOwnProfile(username);
+      setUsername(computedUsername);
+      await syncOwnProfile(computedUsername);
       const [count, requests] = await Promise.all([getFriendsCount(), getIncomingFriendRequests()]);
       if (!cancelled) {
         setFriendsCount(count);
@@ -297,7 +307,7 @@ function ProfileScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [username]);
+  }, [computedUsername, setUsername]);
 
   async function handleSaveUsername() {
     const next = nameDraft.trim();
@@ -332,37 +342,45 @@ function ProfileScreen() {
   async function handleAddFriend(profile: FriendProfile) {
     const res = await sendFriendRequestByUserId(profile.id);
     setFriendMessage(res.message);
-    await sendLocalNotification('Amistades', res.message);
+    if (alertsFriendRequests) {
+      showInAppNotification(res.ok ? 'success' : 'warning', 'Amistades', res.message);
+      await sendLocalNotification('Amistades', res.message);
+    }
   }
 
   async function handleRespondRequest(requestId: string, decision: 'accepted' | 'declined') {
     const res = await respondFriendRequest(requestId, decision);
     setFriendMessage(res.message);
+    if (alertsFriendRequests) {
+      showInAppNotification(res.ok ? 'success' : 'warning', 'Solicitudes', res.message);
+    }
     const [count, requests] = await Promise.all([getFriendsCount(), getIncomingFriendRequests()]);
     setFriendsCount(count);
     setIncomingRequests(requests);
   }
 
+  async function handleEnableBrowserNotifications() {
+    const result = await requestWebNotificationPermission();
+    if (result === 'unsupported') {
+      showInAppNotification('warning', 'No disponible', 'Este navegador no soporta permisos de notificación.');
+      return;
+    }
+    if (result === 'granted') {
+      showInAppNotification('success', 'Notificaciones activadas', 'Recibirás avisos dentro de Flicksy.');
+      return;
+    }
+    showInAppNotification('info', 'Permiso pendiente', 'Puedes activar notificaciones desde ajustes del navegador.');
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}>
         <View style={[styles.card, isDark && styles.cardDark]}>
           <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
-          <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>Usuario</Text>
-          <View style={styles.usernameRow}>
-            <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{username}</Text>
-            <TouchableOpacity
-              style={[styles.usernameEditBtn, isDark && styles.usernameEditBtnDark]}
-              onPress={() => {
-                setNameDraft(username);
-                setIsEditNameOpen(true);
-              }}
-            >
-              <MaterialIcons name="edit" size={14} color={isDark ? '#93C5FD' : '#0369A1'} />
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
+          <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
           {isSupabaseConfigured ? (
-            <TouchableOpacity style={styles.logoutButton} onPress={() => void supabase?.auth.signOut()}>
+            <TouchableOpacity style={styles.logoutButton} onPress={() => void signOut()}>
               <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
             </TouchableOpacity>
           ) : null}
@@ -378,24 +396,15 @@ function ProfileScreen() {
               thumbColor="#FFFFFF"
             />
           </View>
-          <View style={styles.row}>
-            <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Alerta: nueva temporada</Text>
-            <Switch
-              value={alertsNewSeason}
-              onValueChange={setAlertsNewSeason}
-              trackColor={{ false: '#CBD5E1', true: '#0E7490' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Alerta: estreno cercano</Text>
-            <Switch
-              value={alertsUpcomingRelease}
-              onValueChange={setAlertsUpcomingRelease}
-              trackColor={{ false: '#CBD5E1', true: '#0E7490' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
+          <TouchableOpacity style={[styles.notificationsButton, isDark && styles.notificationsButtonDark]} onPress={() => setIsNotificationModalOpen(true)}>
+            <View>
+              <Text style={[styles.notificationsButtonTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Alertas y notificaciones</Text>
+              <Text style={[styles.notificationsButtonSub, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                Configura logros, amistades, estrenos y actividad.
+              </Text>
+            </View>
+            <MaterialIcons name="tune" size={18} color={isDark ? '#7DD3FC' : '#0E7490'} />
+          </TouchableOpacity>
           <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
             {alertsNewSeason ? `${newSeasonAlerts.length} aviso(s) de nueva temporada.` : 'Alertas de temporada desactivadas.'}
           </Text>
@@ -587,12 +596,45 @@ function ProfileScreen() {
           </View>
         </View>
       </Modal>
-      {achievementToast ? (
-        <View style={[styles.achievementToast, isDark && styles.achievementToastDark]}>
-          <MaterialIcons name="emoji-events" size={14} color={isDark ? '#FDE68A' : '#92400E'} />
-          <Text style={[styles.achievementToastText, { color: isDark ? '#FEF3C7' : '#92400E' }]}>{achievementToast}</Text>
+      <Modal visible={isNotificationModalOpen} transparent animationType="fade" onRequestClose={() => setIsNotificationModalOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.notificationsModalCard, isDark && styles.cardDark]}>
+            <View style={styles.modalNotificationsHeader}>
+              <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Notificaciones</Text>
+              <TouchableOpacity onPress={() => setIsNotificationModalOpen(false)}>
+                <MaterialIcons name="close" size={20} color={isDark ? '#E5E7EB' : '#0F172A'} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.row}>
+              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Logros</Text>
+              <Switch value={alertsAchievements} onValueChange={setAlertsAchievements} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Solicitudes de amistad</Text>
+              <Switch value={alertsFriendRequests} onValueChange={setAlertsFriendRequests} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Actividad de amigos</Text>
+              <Switch value={alertsFriendsActivity} onValueChange={setAlertsFriendsActivity} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Nueva temporada</Text>
+              <Switch value={alertsNewSeason} onValueChange={setAlertsNewSeason} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.modeLabel, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Estreno cercano</Text>
+              <Switch value={alertsUpcomingRelease} onValueChange={setAlertsUpcomingRelease} trackColor={{ false: '#CBD5E1', true: '#0E7490' }} thumbColor="#FFFFFF" />
+            </View>
+
+            {isWeb ? (
+              <TouchableOpacity style={styles.modalSave} onPress={() => void handleEnableBrowserNotifications()}>
+                <Text style={styles.modalSaveText}>Activar permisos del navegador</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -606,6 +648,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
     paddingBottom: 24,
+  },
+  contentWeb: {
+    width: '100%',
+    maxWidth: 1180,
+    alignSelf: 'center',
   },
   card: {
     backgroundColor: '#FFFFFF',
