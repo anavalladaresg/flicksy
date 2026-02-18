@@ -3,7 +3,8 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
     Image,
@@ -15,9 +16,13 @@ import {
     View,
 } from 'react-native';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
+import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
+import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useTVShowDetails } from '../features/tv/presentation/hooks';
+import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
+import type { TrackedItem } from '../types';
 
 interface TVDetailsScreenProps {
   route: any;
@@ -28,26 +33,129 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   route,
   navigation,
 }) => {
-  const { tvId } = route.params;
+  const isDark = useColorScheme() === 'dark';
+  const { tvId, fromFriendId, fromFriendName } = route.params;
   const { data: show, isLoading, isError, refetch } = useTVShowDetails(tvId);
   const addTrackedItem = useTrackingStore((state) => state.addItem);
+  const updateTrackedItem = useTrackingStore((state) => state.updateItem);
+  const removeTrackedItem = useTrackingStore((state) => state.removeItem);
   const trackedItems = useTrackingStore((state) => state.items);
+  const [isRatingOpen, setIsRatingOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('watching');
+  const [startedAt, setStartedAt] = useState('');
+  const [finishedAt, setFinishedAt] = useState('');
+  const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
+  const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
   const isTracked = trackedItems.some(
     (item) => item.externalId === tvId && item.mediaType === 'tv'
   );
+  const trackedTVItem = trackedItems.find(
+    (item) => item.externalId === tvId && item.mediaType === 'tv'
+  );
+  const visibleFriendsRatings = fromFriendId
+    ? friendsRatings.filter((entry) => entry.friendId !== fromFriendId)
+    : friendsRatings;
 
-  const handleAddToTracking = () => {
+  useEffect(() => {
+    if (!fromFriendId || !tvId) {
+      setFriendTrackedItem(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const item = await getFriendLibraryItem(fromFriendId, 'tv', tvId);
+      if (!cancelled) setFriendTrackedItem(item);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromFriendId, tvId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ratings = await getFriendsRatingsForItem('tv', tvId);
+      if (!cancelled) setFriendsRatings(ratings);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tvId]);
+
+  function statusLabel(value: 'planned' | 'watching' | 'completed') {
+    if (value === 'planned') return 'Pendiente';
+    if (value === 'watching') return 'Viendo';
+    return 'Vista';
+  }
+
+  function ratingValue(value: number) {
+    if (!value) return '0.0/10';
+    return `${value.toFixed(1)}/10`;
+  }
+
+  function statusTone(value: 'planned' | 'watching' | 'completed') {
+    if (value === 'planned') return { color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' };
+    if (value === 'watching') return { color: '#0369A1', bg: '#E0F2FE', border: '#7DD3FC' };
+    return { color: '#15803D', bg: '#DCFCE7', border: '#86EFAC' };
+  }
+
+  function formatShortDate(value?: string): string {
+    if (!value) return 'sin fecha';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  const handleConfirmAdd = () => {
+    if (!show) return;
+    if (trackedTVItem) {
+      updateTrackedItem(trackedTVItem.id, {
+        rating,
+        status,
+        startedAt: startedAt.trim() || undefined,
+        finishedAt: finishedAt.trim() || undefined,
+        releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
+        genres: show.genres?.map((genre) => genre.name) ?? [],
+        estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
+        seasonsAtAdd: show.number_of_seasons ?? undefined,
+      });
+      setIsRatingOpen(false);
+      return;
+    }
     if (show && !isTracked) {
       addTrackedItem({
         externalId: show.id,
         mediaType: 'tv',
         title: show.name,
         posterPath: show.poster_path || undefined,
-        status: 'watching',
+        rating,
+        status,
+        startedAt: startedAt.trim() || undefined,
+        finishedAt: finishedAt.trim() || undefined,
+        releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
+        genres: show.genres?.map((genre) => genre.name) ?? [],
+        estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
+        seasonsAtAdd: show.number_of_seasons ?? undefined,
       });
+      setIsRatingOpen(false);
     }
   };
+
+  function openEditor() {
+    if (!trackedTVItem) return;
+    setRating(trackedTVItem.rating ?? 0);
+    setStatus(
+      (trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching'
+    );
+    setStartedAt(trackedTVItem.startedAt ?? '');
+    setFinishedAt(trackedTVItem.finishedAt ?? '');
+    setIsRatingOpen(true);
+  }
 
   if (isLoading) {
     return (
@@ -77,7 +185,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#fff' }]}>
       <ScrollView>
         <View style={styles.header}>
           <TouchableOpacity
@@ -89,31 +197,104 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         </View>
 
         {show.poster_path && (
-          <Image
-            source={{
-              uri: `${TMDB_IMAGE_BASE_URL}${show.backdrop_path || show.poster_path}`,
-            }}
-            style={styles.backdrop}
-            resizeMode="cover"
-          />
+          <View style={styles.backdropWrap}>
+            <Image
+              source={{
+                uri: `${TMDB_IMAGE_BASE_URL}${show.backdrop_path || show.poster_path}`,
+              }}
+              style={styles.backdrop}
+              resizeMode="cover"
+            />
+          </View>
         )}
 
         <View style={styles.content}>
-          <Text style={styles.title}>{show.name}</Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#333' }]}>{show.name}</Text>
+            <TouchableOpacity
+              style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
+              onPress={() => {
+                if (trackedTVItem) {
+                  removeTrackedItem(trackedTVItem.id);
+                } else {
+                  setRating(0);
+                  setStatus('watching');
+                  setStartedAt('');
+                  setFinishedAt('');
+                  setIsRatingOpen(true);
+                }
+              }}
+            >
+              <MaterialIcons
+                name={isTracked ? 'delete' : 'add'}
+                size={18}
+                color={isTracked ? '#B91C1C' : '#FFFFFF'}
+              />
+              <Text style={[styles.inlineAddText, isTracked && styles.inlineAddTextTracked]}>
+                {isTracked ? 'Eliminar' : 'Añadir'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {trackedTVItem && (
+            <View style={[styles.myDataCard, isDark && styles.myDataCardDark]}>
+              <TouchableOpacity style={[styles.editDataButton, isDark && styles.editDataButtonDark]} onPress={openEditor}>
+                <MaterialIcons name="edit" size={14} color="#0E7490" />
+              </TouchableOpacity>
+              <View style={styles.myDataTopRow}>
+                <View
+                  style={[
+                    styles.statusPill,
+                    isDark && styles.statusPillDark,
+                    {
+                      borderColor: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').border,
+                      backgroundColor: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').bg,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="flag"
+                    size={13}
+                    color={statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').color}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      { color: statusTone((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching').color },
+                    ]}
+                  >
+                    {statusLabel((trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'watching')}
+                  </Text>
+                </View>
+                <Text style={[styles.ratingLine, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>⭐️ {ratingValue(trackedTVItem.rating ?? 0)}</Text>
+              </View>
+              <Text style={[styles.myDataDate, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                {formatShortDate(trackedTVItem.startedAt)} - {formatShortDate(trackedTVItem.finishedAt)}
+              </Text>
+            </View>
+          )}
+          {!trackedTVItem && friendTrackedItem && (
+            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
+              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
+                {fromFriendName || 'Tu amigo/a'} ha puntuado esta serie con{' '}
+                {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
+              </Text>
+            </View>
+          )}
+          <FriendsRatingsBlock itemLabel="serie" ratings={visibleFriendsRatings} />
 
           <View style={styles.info}>
             {show.number_of_seasons && (
-              <Text style={styles.infoText}>
+              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#666' }]}>
                 📺 {show.number_of_seasons} temporada(s)
               </Text>
             )}
             {show.number_of_episodes && (
-              <Text style={styles.infoText}>
+              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#666' }]}>
                 🎬 {show.number_of_episodes} episodios
               </Text>
             )}
-            <Text style={styles.infoText}>
-              ⭐ {show.vote_average.toFixed(1)}/10
+            <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#666' }]}>
+              🌐 {show.vote_average.toFixed(1)}/10
             </Text>
           </View>
 
@@ -127,28 +308,30 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>Sinopsis</Text>
-          <Text style={styles.description}>{show.overview}</Text>
+          <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#333' }]}>Sinopsis</Text>
+          <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#666' }]}>{show.overview}</Text>
 
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isTracked && styles.buttonTracked,
-            ]}
-            onPress={handleAddToTracking}
-            disabled={isTracked}
-          >
-            <MaterialIcons
-              name={isTracked ? 'check-circle' : 'add-circle'}
-              size={24}
-              color={isTracked ? '#4CAF50' : '#fff'}
-            />
-            <Text style={[styles.buttonText, isTracked && styles.buttonTextTracked]}>
-              {isTracked ? 'Agregada' : 'Agregar a Biblioteca'}
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
+      <RatingPickerModal
+        visible={isRatingOpen}
+        title={show.name}
+        value={rating}
+        status={status}
+        statusOptions={[
+          { value: 'planned', label: 'Pendiente', color: '#64748B' },
+          { value: 'watching', label: 'Viendo', color: '#0284C7' },
+          { value: 'completed', label: 'Visto', color: '#16A34A' },
+        ]}
+        startedAt={startedAt}
+        finishedAt={finishedAt}
+        onChange={setRating}
+        onChangeStatus={(next) => setStatus(next as 'planned' | 'watching' | 'completed')}
+        onChangeStartedAt={setStartedAt}
+        onChangeFinishedAt={setFinishedAt}
+        onCancel={() => setIsRatingOpen(false)}
+        onConfirm={handleConfirmAdd}
+      />
     </SafeAreaView>
   );
 };
@@ -180,15 +363,137 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 300,
   },
+  backdropWrap: {
+    position: 'relative',
+  },
   content: {
     paddingHorizontal: 16,
     paddingVertical: 20,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
   title: {
+    flex: 1,
     fontSize: 24,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 12,
+  },
+  inlineAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0E7490',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  inlineAddButtonTracked: {
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#B91C1C',
+  },
+  inlineAddText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inlineAddTextTracked: {
+    color: '#B91C1C',
+  },
+  myDataCard: {
+    marginTop: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  myDataCardDark: {
+    backgroundColor: '#111827',
+    borderColor: '#334155',
+  },
+  friendDataCard: {
+    marginTop: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  friendDataCardDark: {
+    backgroundColor: '#1F2937',
+    borderColor: '#92400E',
+  },
+  friendDataText: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  editDataButton: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFEFF',
+    borderWidth: 1,
+    borderColor: '#A5F3FC',
+    zIndex: 20,
+    elevation: 4,
+  },
+  editDataButtonDark: {
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
+  },
+  myDataTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+    backgroundColor: '#ECFEFF',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  statusPillDark: {
+    borderColor: '#334155',
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0E7490',
+  },
+  ratingLine: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  myDataDate: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'right',
   },
   info: {
     flexDirection: 'row',
@@ -230,28 +535,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#666',
     marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 16,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  buttonTracked: {
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  buttonTextTracked: {
-    color: '#4CAF50',
   },
 });
 

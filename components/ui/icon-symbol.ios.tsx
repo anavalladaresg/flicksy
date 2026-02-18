@@ -1,5 +1,5 @@
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
-import { StyleProp, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
 
 export function IconSymbol({
   name,
@@ -14,6 +14,11 @@ export function IconSymbol({
   style?: StyleProp<ViewStyle>;
   weight?: SymbolWeight;
 }) {
+  const flattenedStyle = StyleSheet.flatten(style) as
+    | (ViewStyle & { resizeMode?: unknown })
+    | undefined;
+  const { resizeMode: _deprecatedResizeMode, ...sanitizedStyle } = flattenedStyle ?? {};
+
   return (
     <SymbolView
       weight={weight}
@@ -25,7 +30,7 @@ export function IconSymbol({
           width: size,
           height: size,
         },
-        style,
+        sanitizedStyle,
       ]}
     />
   );
