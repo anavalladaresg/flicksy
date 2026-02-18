@@ -7,29 +7,10 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import DynamicTopTabs from '@/src/components/common/DynamicTopTabs';
 import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { supabase } from '@/src/services/supabase';
 import { getPendingFriendRequestsCount } from '@/src/services/social';
-
-// Estilos CSS para hover en web
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* Efectos hover para tabs en web */
-    [data-testid="tab-bar-button"] {
-      transition: all 0.2s ease !important;
-      border-radius: 12px !important;
-    }
-    [data-testid="tab-bar-button"]:hover {
-      transform: scale(1.08) translateY(-2px) !important;
-      background-color: rgba(14, 116, 144, 0.1) !important;
-    }
-    [data-testid="tab-bar-button"][aria-selected="true"]:hover {
-      background-color: rgba(14, 116, 144, 0.15) !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -81,23 +62,26 @@ export default function TabLayout() {
     return <Redirect href="/auth" />;
   }
 
+  const webTabBar = isWeb
+    ? (props: Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0]) => (
+        <DynamicTopTabs
+          {...props}
+          isDark={colorScheme === 'dark'}
+          pendingRequests={pendingRequests}
+          activeColor={Colors[colorScheme ?? 'light'].tint}
+        />
+      )
+    : undefined;
+
   return (
     <Tabs
+      tabBar={webTabBar}
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: isWeb ? undefined : HapticTab,
         tabBarPosition: isWeb ? 'top' : 'bottom',
-        tabBarStyle: isWeb
-          ? {
-              height: 56,
-              borderBottomWidth: 1,
-              borderTopWidth: 0,
-              borderBottomColor: colorScheme === 'dark' ? '#1F2937' : '#E2E8F0',
-              backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#FFFFFF',
-              paddingTop: 4,
-            }
-          : undefined,
+        tabBarStyle: isWeb ? { display: 'none' } : undefined,
       }}>
       <Tabs.Screen
         name="index"
