@@ -3,7 +3,7 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
@@ -27,6 +27,25 @@ import type { TrackedItem } from '../types';
 interface TVDetailsScreenProps {
   route: any;
   navigation: any;
+}
+
+type StreamProvider = { provider_id: number; provider_name: string; logo_path?: string | null };
+
+function getStreamingProviders(payload: any): { region: string | null; providers: StreamProvider[] } {
+  const byRegion = payload?.['watch/providers']?.results as Record<string, any> | undefined;
+  if (!byRegion) return { region: null, providers: [] };
+
+  const preferredRegions = ['ES', 'US'];
+  for (const region of preferredRegions) {
+    const flatrate = byRegion?.[region]?.flatrate;
+    if (Array.isArray(flatrate) && flatrate.length > 0) {
+      return { region, providers: flatrate as StreamProvider[] };
+    }
+  }
+
+  const fallbackRegion = Object.keys(byRegion).find((key) => Array.isArray(byRegion?.[key]?.flatrate) && byRegion[key].flatrate.length > 0);
+  if (!fallbackRegion) return { region: null, providers: [] };
+  return { region: fallbackRegion, providers: byRegion[fallbackRegion].flatrate as StreamProvider[] };
 }
 
 const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
@@ -115,6 +134,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const trailerVideo = show?.videos?.results?.find(
     (video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser')
   );
+  const streaming = useMemo(() => getStreamingProviders(show), [show]);
   const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
 
   async function openTrailer() {
@@ -327,6 +347,30 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
               <MaterialIcons name="play-circle-filled" size={18} color="#FFFFFF" />
               <Text style={styles.trailerButtonText}>Ver tráiler</Text>
             </TouchableOpacity>
+          ) : null}
+
+          {streaming.providers.length > 0 ? (
+            <View style={styles.streamingWrap}>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A', marginTop: 2 }]}>
+                Dónde verla {streaming.region ? `(${streaming.region})` : ''}
+              </Text>
+              <View style={styles.streamingList}>
+                {streaming.providers.map((provider) => (
+                  <View key={provider.provider_id} style={[styles.providerChip, isDark && styles.providerChipDark]}>
+                    {provider.logo_path ? (
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
+                        style={styles.providerLogo}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                    <Text style={[styles.providerName, { color: isDark ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
+                      {provider.provider_name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           ) : null}
 
           {show.genres && show.genres.length > 0 && (
@@ -610,6 +654,41 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+  streamingWrap: {
+    marginBottom: 14,
+  },
+  streamingList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  providerChip: {
+    maxWidth: 140,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  providerChipDark: {
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+  },
+  providerLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#E2E8F0',
+  },
+  providerName: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '700',
   },
   genres: {
     flexDirection: 'row',

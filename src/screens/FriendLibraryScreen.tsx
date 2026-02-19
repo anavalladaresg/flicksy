@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import UserAvatar from '../components/common/UserAvatar';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { getFriendLibrary } from '../services/social';
 import type { MediaType, TrackedItem } from '../types';
@@ -49,7 +50,7 @@ function getStatusColor(status: TrackedItem['status']) {
 function FriendLibraryScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
-  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+  const { id, name, avatarUrl } = useLocalSearchParams<{ id: string; name?: string; avatarUrl?: string }>();
   const [items, setItems] = useState<TrackedItem[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
@@ -106,7 +107,16 @@ function FriendLibraryScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={[styles.backText, { color: isDark ? '#CBD5E1' : '#334155' }]}>Volver</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{name ? `Biblioteca de ${name}` : 'Biblioteca amiga/o'}</Text>
+      </View>
+
+      <View style={[styles.friendHero, isDark && styles.friendHeroDark]}>
+        <UserAvatar avatarUrl={avatarUrl ?? null} size={86} isDark={isDark} />
+        <Text style={[styles.friendHeroName, { color: isDark ? '#E5E7EB' : '#0F172A' }]} numberOfLines={1}>
+          {name || 'Amigo/a'}
+        </Text>
+        <Text style={[styles.friendHeroMeta, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+          {filtered.length} de {items.length} elementos
+        </Text>
       </View>
 
       <View style={styles.controls}>
@@ -233,10 +243,34 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     backgroundColor: '#111827',
   },
-  title: { fontSize: 20, fontWeight: '900' },
   backText: { fontSize: 13, fontWeight: '700' },
+  friendHero: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    gap: 8,
+  },
+  friendHeroDark: {
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
+  },
+  friendHeroName: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  friendHeroMeta: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   controls: {
     gap: 8,
+    marginTop: 10,
     marginBottom: 10,
     position: 'relative',
     zIndex: 60,
@@ -401,4 +435,3 @@ const styles = StyleSheet.create({
 });
 
 export default FriendLibraryScreen;
-

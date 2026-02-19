@@ -143,7 +143,7 @@ export class TVRepository implements ITVRepository {
     try {
       const response = await tmdbHttp.get(`/tv/${id}`, {
         params: {
-          append_to_response: 'credits,videos,translations',
+          append_to_response: 'credits,videos,translations,watch/providers',
         },
       });
 

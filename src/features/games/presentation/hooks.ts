@@ -18,6 +18,7 @@ export const usePopularGames = (
     queryFn: () => gameRepository.getPopularGames(page),
     staleTime: CACHE_TIMES.POPULAR,
     gcTime: CACHE_TIMES.POPULAR * 2,
+    retry: false,
     enabled,
   });
 };
@@ -32,6 +33,7 @@ export const useSearchGames = (
     queryFn: () => gameRepository.searchGames(query, page),
     staleTime: CACHE_TIMES.SEARCH,
     gcTime: CACHE_TIMES.SEARCH * 2,
+    retry: false,
     enabled: enabled && query.length > 0,
   });
 };
@@ -42,6 +44,7 @@ export const useGameDetails = (id: number): UseQueryResult<Game> => {
     queryFn: () => gameRepository.getGameDetails(id),
     staleTime: CACHE_TIMES.DETAIL,
     gcTime: CACHE_TIMES.DETAIL * 2,
+    retry: false,
     enabled: Number.isFinite(id) && id > 0,
   });
 };
@@ -55,6 +58,7 @@ export const useNewGames = (
     queryFn: () => gameRepository.getNewGames(period),
     staleTime: CACHE_TIMES.POPULAR,
     gcTime: CACHE_TIMES.POPULAR * 2,
+    retry: false,
     enabled,
   });
 };
@@ -68,6 +72,7 @@ export const useTrendingGames = (
     queryFn: () => gameRepository.getTrendingGames(period),
     staleTime: CACHE_TIMES.POPULAR,
     gcTime: CACHE_TIMES.POPULAR * 2,
+    retry: false,
     enabled,
   });
 };
@@ -82,6 +87,7 @@ export const useGamesBySort = (
     queryFn: () => gameRepository.getGamesBySort(sortBy, page),
     staleTime: CACHE_TIMES.POPULAR,
     gcTime: CACHE_TIMES.POPULAR * 2,
+    retry: false,
     enabled,
   });
 };

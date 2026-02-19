@@ -6,13 +6,16 @@ import { useQueries } from '@tanstack/react-query';
 import { ActivityIndicator, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import UserAvatar from '../components/common/UserAvatar';
+import FriendSectionCard from '../components/common/FriendSectionCard';
+import { type AddFriendSearchResult } from '../components/common/AddFriendModal';
+import FriendRequestsModal from '../components/common/FriendRequestsModal';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
 import { tvRepository } from '../features/tv/data/repositories';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 import {
+  getFriendsCompatibility,
   getOwnProfile,
-  getFriendsCount,
   getFriendsList,
   getIncomingFriendRequests,
   isUsernameAvailable,
@@ -24,7 +27,7 @@ import {
   type FriendProfile,
   type FriendRequestItem,
 } from '../services/social';
-import { getAvatarOptions, type AvatarOption } from '../services/avatars';
+import { getAvatarOptions, searchAvatarOptions, type AvatarOption } from '../services/avatars';
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
@@ -120,6 +123,9 @@ function previousPeriodDate(period: 'weekly' | 'monthly', from = new Date()): Da
   return copy;
 }
 
+const PROFILE_DETAILS_LIMIT_WEB = 6;
+const PROFILE_DETAILS_LIMIT_NATIVE = 12;
+
 function ProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
@@ -159,29 +165,66 @@ function ProfileScreen() {
   const [isEditAvatarOpen, setIsEditAvatarOpen] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarOptions, setAvatarOptions] = useState<AvatarOption[]>([]);
+  const [avatarSearchQuery, setAvatarSearchQuery] = useState('');
+  const [avatarSearchLoading, setAvatarSearchLoading] = useState(false);
+  const [avatarSearchOptions, setAvatarSearchOptions] = useState<AvatarOption[]>([]);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(storedProfileAvatarUrl);
   const [friendsQuery, setFriendsQuery] = useState('');
+  const [friendsSearchLoading, setFriendsSearchLoading] = useState(false);
+  const [friendsSearchError, setFriendsSearchError] = useState('');
+  const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [friendResults, setFriendResults] = useState<FriendProfile[]>([]);
-  const [friendsPreview, setFriendsPreview] = useState<FriendProfile[]>([]);
+  const [sentFriendRequestIds, setSentFriendRequestIds] = useState<Record<string, true>>({});
+  const [compatibilityByFriendId, setCompatibilityByFriendId] = useState<Record<string, { compatibility: number; sharedItems: number }>>({});
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
   const [friendMessage, setFriendMessage] = useState('');
+  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
   const googleAccountImage =
     ((user?.externalAccounts as any[])?.find((account: any) => account?.provider === 'oauth_google')?.imageUrl as string | undefined) ||
     null;
   const effectiveAvatarUrl = profileAvatarUrl || storedProfileAvatarUrl || googleAccountImage || null;
+  const friendIdsSet = useMemo(() => new Set(friendsList.map((friend) => friend.id)), [friendsList]);
+  const profileDetailsLimit = isWeb ? PROFILE_DETAILS_LIMIT_WEB : PROFILE_DETAILS_LIMIT_NATIVE;
+
+  const friendsPreviewData = useMemo(
+    () =>
+      friendsList.map((friend) => ({
+        id: friend.id,
+        name: friend.display_name || friend.username || 'Amigo/a',
+        username: friend.username,
+        avatarUrl: friend.avatar_url ?? null,
+        compatibilityScore: compatibilityByFriendId[friend.id]?.compatibility ?? null,
+      })),
+    [compatibilityByFriendId, friendsList]
+  );
+
+  const friendSearchItems = useMemo<AddFriendSearchResult[]>(
+    () =>
+      friendResults.map((profile) => {
+        const state = friendIdsSet.has(profile.id) ? 'friend' : sentFriendRequestIds[profile.id] ? 'sent' : 'add';
+        return {
+          id: profile.id,
+          name: profile.display_name || profile.username,
+          username: profile.username,
+          avatarUrl: profile.avatar_url ?? null,
+          state,
+        };
+      }),
+    [friendResults, friendIdsSet, sentFriendRequestIds]
+  );
 
   const movieIds = useMemo(
-    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'movie').map((item) => item.externalId))).slice(0, 20),
-    [trackedItems]
+    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'movie').map((item) => item.externalId))).slice(0, profileDetailsLimit),
+    [profileDetailsLimit, trackedItems]
   );
   const tvIds = useMemo(
-    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'tv').map((item) => item.externalId))).slice(0, 20),
-    [trackedItems]
+    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'tv').map((item) => item.externalId))).slice(0, profileDetailsLimit),
+    [profileDetailsLimit, trackedItems]
   );
   const gameIds = useMemo(
-    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'game').map((item) => item.externalId))).slice(0, 20),
-    [trackedItems]
+    () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'game').map((item) => item.externalId))).slice(0, profileDetailsLimit),
+    [profileDetailsLimit, trackedItems]
   );
 
   const movieQueries = useQueries({
@@ -330,20 +373,30 @@ function ProfileScreen() {
   );
 
   useEffect(() => {
+    setUsername(computedUsername);
+    void syncOwnProfile(computedUsername, { displayName, fallbackAvatarUrl: googleAccountImage });
+  }, [computedUsername, displayName, googleAccountImage, setUsername]);
+
+  useEffect(() => {
     let cancelled = false;
     const refreshFriendsData = async () => {
-      setUsername(computedUsername);
-      await syncOwnProfile(computedUsername, { displayName, fallbackAvatarUrl: googleAccountImage });
-      const [count, requests, friends, ownProfile] = await Promise.all([
-        getFriendsCount(),
+      const [requestsRes, friendsRes, compatibilityRes, ownProfileRes] = await Promise.allSettled([
         getIncomingFriendRequests(),
         getFriendsList(),
+        getFriendsCompatibility(),
         getOwnProfile(),
       ]);
       if (!cancelled) {
-        setFriendsCount(count);
+        const requests = requestsRes.status === 'fulfilled' ? requestsRes.value : [];
+        const friends = friendsRes.status === 'fulfilled' ? friendsRes.value : [];
+        const compatibility = compatibilityRes.status === 'fulfilled' ? compatibilityRes.value : {};
+        const ownProfile = ownProfileRes.status === 'fulfilled' ? ownProfileRes.value : null;
+
+        setFriendsCount(friends.length);
         setIncomingRequests(requests);
-        setFriendsPreview(friends.slice(0, 4));
+        setFriendsList(friends);
+        setCompatibilityByFriendId(compatibility);
+
         const remoteAvatar = ownProfile?.avatar_url ?? null;
         if (remoteAvatar) {
           setProfileAvatarUrl(remoteAvatar);
@@ -352,12 +405,12 @@ function ProfileScreen() {
       }
     };
     void refreshFriendsData();
-    const interval = setInterval(() => void refreshFriendsData(), 12000);
+    const interval = setInterval(() => void refreshFriendsData(), 30000);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [computedUsername, displayName, googleAccountImage, setStoredProfileAvatarUrl, setUsername]);
+  }, [setStoredProfileAvatarUrl]);
 
   useEffect(() => {
     const now = new Date();
@@ -450,17 +503,43 @@ function ProfileScreen() {
     }
   }
 
-  async function handleSearchFriends() {
-    const results = await searchProfilesByUsername(friendsQuery);
-    setFriendResults(results);
-    if (friendsQuery.trim().length >= 2 && results.length === 0) {
-      setFriendMessage('No encontramos usuarias/os con ese nombre.');
+  useEffect(() => {
+    const cleaned = friendsQuery.trim();
+    if (cleaned.length < 2) {
+      setFriendResults([]);
+      setFriendsSearchLoading(false);
+      setFriendsSearchError('');
+      return;
     }
-  }
 
-  async function handleAddFriend(profile: FriendProfile) {
-    const res = await sendFriendRequestByUserId(profile.id);
+    let cancelled = false;
+    setFriendsSearchLoading(true);
+    setFriendsSearchError('');
+    const timeout = setTimeout(() => {
+      void (async () => {
+        try {
+          const results = await searchProfilesByUsername(cleaned);
+          if (!cancelled) setFriendResults(results);
+        } catch {
+          if (!cancelled) setFriendsSearchError('No se pudo buscar ahora.');
+        } finally {
+          if (!cancelled) setFriendsSearchLoading(false);
+        }
+      })();
+    }, 320);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [friendsQuery]);
+
+  async function handleAddFriend(userId: string) {
+    const res = await sendFriendRequestByUserId(userId);
     setFriendMessage(res.message);
+    if (res.ok) {
+      setSentFriendRequestIds((prev) => ({ ...prev, [userId]: true }));
+    }
     if (alertsFriendRequests) {
       showInAppNotification(res.ok ? 'success' : 'warning', 'Amistades', res.message);
       await sendLocalNotification('Amistades', res.message);
@@ -469,15 +548,42 @@ function ProfileScreen() {
 
   async function openAvatarPicker() {
     setIsEditAvatarOpen(true);
+    setAvatarSearchQuery('');
+    setAvatarSearchOptions([]);
     if (avatarOptions.length > 0) return;
     setAvatarLoading(true);
     try {
-      const options = await getAvatarOptions(100);
+      const options = await getAvatarOptions(220);
       setAvatarOptions(options);
     } finally {
       setAvatarLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!isEditAvatarOpen) return;
+    const cleaned = avatarSearchQuery.trim();
+    if (cleaned.length < 2) {
+      setAvatarSearchOptions([]);
+      setAvatarSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAvatarSearchLoading(true);
+    const timeout = setTimeout(() => {
+      void (async () => {
+        const results = await searchAvatarOptions(cleaned);
+        if (!cancelled) setAvatarSearchOptions(results);
+        if (!cancelled) setAvatarSearchLoading(false);
+      })();
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [avatarSearchQuery, isEditAvatarOpen]);
 
   async function handleSelectAvatar(nextAvatarUrl: string | null) {
     const previous = profileAvatarUrl;
@@ -505,9 +611,16 @@ function ProfileScreen() {
     if (alertsFriendRequests) {
       showInAppNotification(res.ok ? 'success' : 'warning', 'Solicitudes', res.message);
     }
-    const [count, requests] = await Promise.all([getFriendsCount(), getIncomingFriendRequests()]);
-    setFriendsCount(count);
-    setIncomingRequests(requests);
+    const [requestsRes, friendsRes, compatibilityRes] = await Promise.allSettled([
+      getIncomingFriendRequests(),
+      getFriendsList(),
+      getFriendsCompatibility(),
+    ]);
+    const friends = friendsRes.status === 'fulfilled' ? friendsRes.value : [];
+    setFriendsCount(friends.length);
+    setIncomingRequests(requestsRes.status === 'fulfilled' ? requestsRes.value : []);
+    setFriendsList(friends);
+    setCompatibilityByFriendId(compatibilityRes.status === 'fulfilled' ? compatibilityRes.value : {});
   }
 
   return (
@@ -577,94 +690,32 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoTwoThird]}>
-          <View style={styles.friendsHeaderRow}>
-            <View style={styles.friendsTitleRow}>
-              <Text style={[styles.friendsBlockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Amigos</Text>
-              <View style={styles.friendsCountBadge}>
-                <Text style={styles.friendsCountText}>{friendsCount}</Text>
-              </View>
-            </View>
-          </View>
-
-          {incomingRequests.length > 0 ? (
-            <View style={styles.requestsWrap}>
-              <Text style={[styles.subSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
-                Solicitudes ({incomingRequests.length})
-              </Text>
-              {incomingRequests.map((request) => (
-                <View key={request.id} style={[styles.requestRow, isDark && styles.requestRowDark]}>
-                  <View style={styles.requestMainInfo}>
-                    <UserAvatar avatarUrl={request.fromProfile?.avatar_url ?? null} size={28} isDark={isDark} />
-                    <Text style={[styles.requestName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                      {request.fromName || 'Usuario'}
-                    </Text>
-                  </View>
-                  <View style={styles.requestButtons}>
-                    <TouchableOpacity style={styles.requestAccept} onPress={() => handleRespondRequest(request.id, 'accepted')}>
-                      <Text style={styles.requestBtnText}>Aceptar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.requestDecline} onPress={() => handleRespondRequest(request.id, 'declined')}>
-                      <Text style={styles.requestBtnText}>Denegar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.friendSearchRow}>
-            <TextInput
-              value={friendsQuery}
-              onChangeText={setFriendsQuery}
-              placeholder="Buscar por nombre de usuario"
-              placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
-              style={[styles.friendSearchInput, isDark && styles.friendSearchInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
-              onSubmitEditing={() => void handleSearchFriends()}
-              onKeyPress={(event) => {
-                if (event.nativeEvent.key === 'Enter') {
-                  void handleSearchFriends();
-                }
-              }}
-              returnKeyType="search"
-              blurOnSubmit={false}
-            />
-            <TouchableOpacity style={styles.friendSearchButton} onPress={handleSearchFriends}>
-              <Text style={styles.friendSearchButtonText}>Buscar</Text>
-            </TouchableOpacity>
-          </View>
-          {!!friendMessage && <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>{friendMessage}</Text>}
-          {friendResults.map((profile) => (
-            <View key={profile.id} style={[styles.friendResultRow, isDark && styles.friendResultRowDark]}>
-              <View style={styles.friendResultMainInfo}>
-                <UserAvatar avatarUrl={profile.avatar_url ?? null} size={30} isDark={isDark} />
-                <Text style={[styles.friendResultName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                  {profile.display_name || profile.username}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.friendAddBtn} onPress={() => handleAddFriend(profile)}>
-                <Text style={styles.friendAddText}>Añadir</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          <View style={[styles.friendsPreviewSection, isDark && styles.friendsPreviewSectionDark]}>
-            <Text style={[styles.subSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Tus amigos destacados</Text>
-            {friendsPreview.length === 0 ? (
-              <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Aún no tienes amigos añadidos.</Text>
-            ) : (
-              friendsPreview.map((friend) => (
-                <View key={friend.id} style={[styles.friendPreviewRow, isDark && styles.friendPreviewRowDark]}>
-                  <UserAvatar avatarUrl={friend.avatar_url ?? null} size={24} isDark={isDark} />
-                  <Text style={[styles.friendPreviewName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                    {friend.display_name || friend.username}
-                  </Text>
-                </View>
-              ))
-            )}
-            <TouchableOpacity style={styles.friendsSeeAllBtn} onPress={() => router.push('/friends')}>
-              <Text style={styles.friendsSeeAllText}>Ver todos los amigos</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={useWebBento ? styles.bentoTwoThird : null}>
+          <FriendSectionCard
+            isDark={isDark}
+            friends={friendsPreviewData}
+            friendCount={friendsCount}
+            pendingRequestsCount={incomingRequests.length}
+            searchQuery={friendsQuery}
+            searchResults={friendSearchItems}
+            searchLoading={friendsSearchLoading}
+            searchError={friendsSearchError}
+            onChangeSearchQuery={setFriendsQuery}
+            onOpenFriendsList={() => router.push('/friends')}
+            onOpenFriendLibrary={(friendId) =>
+              router.push({
+                pathname: `/friend/${friendId}` as any,
+                params: {
+                  name: friendsPreviewData.find((friend) => friend.id === friendId)?.name || 'Amigo/a',
+                  avatarUrl: friendsPreviewData.find((friend) => friend.id === friendId)?.avatarUrl || '',
+                },
+              })
+            }
+            onOpenRequestsModal={() => setIsRequestsModalOpen(true)}
+            onSendFriendRequest={(userId) => void handleAddFriend(userId)}
+            onCompatibilityLongPress={(score) => setFriendMessage(`Compatibilidad ${score}%`)}
+          />
+          {!!friendMessage && <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B', marginTop: 6 }]}>{friendMessage}</Text>}
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoTwoThird, useWebBento && styles.bentoTall]}>
@@ -835,6 +886,14 @@ function ProfileScreen() {
         </View>
         </View>
       </ScrollView>
+      <FriendRequestsModal
+        visible={isRequestsModalOpen}
+        isDark={isDark}
+        requests={incomingRequests}
+        onClose={() => setIsRequestsModalOpen(false)}
+        onAccept={(requestId) => void handleRespondRequest(requestId, 'accepted')}
+        onReject={(requestId) => void handleRespondRequest(requestId, 'declined')}
+      />
       <Modal visible={isEditNameOpen} transparent animationType="fade" onRequestClose={() => setIsEditNameOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, isDark && styles.cardDark]}>
@@ -864,13 +923,23 @@ function ProfileScreen() {
             <TouchableOpacity style={[styles.avatarResetBtn, isDark && styles.avatarResetBtnDark]} onPress={() => void handleSelectAvatar(null)}>
               <Text style={styles.avatarResetText}>Usar foto por defecto</Text>
             </TouchableOpacity>
-            {avatarLoading ? (
+            <TextInput
+              value={avatarSearchQuery}
+              onChangeText={setAvatarSearchQuery}
+              placeholder="Buscar peli, serie o juego..."
+              placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
+              style={[styles.avatarSearchInput, isDark && styles.avatarSearchInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+            {avatarLoading || avatarSearchLoading ? (
               <View style={styles.avatarLoadingWrap}>
                 <ActivityIndicator size="small" color="#0E7490" />
               </View>
             ) : (
               <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
-                {avatarOptions.map((avatar) => (
+                {(avatarSearchQuery.trim().length >= 2 ? avatarSearchOptions : avatarOptions).map((avatar) => (
                   <TouchableOpacity
                     key={avatar.id}
                     style={[
@@ -883,6 +952,11 @@ function ProfileScreen() {
                     <UserAvatar avatarUrl={avatar.imageUrl} size={62} isDark={isDark} />
                   </TouchableOpacity>
                 ))}
+                {avatarSearchQuery.trim().length >= 2 && avatarSearchOptions.length === 0 ? (
+                  <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B', width: '100%', textAlign: 'center' }]}>
+                    Sin resultados para esa búsqueda.
+                  </Text>
+                ) : null}
               </ScrollView>
             )}
             <View style={styles.modalActions}>
@@ -1161,173 +1235,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  friendsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  friendsTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  friendsBlockTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  friendsCountBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#0E7490',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    marginTop: 1,
-  },
-  friendsCountText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  friendsListBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  friendsListBtnDark: {
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-  },
-  requestsWrap: {
-    marginBottom: 8,
-  },
-  requestRow: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 8,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 6,
-  },
-  requestRowDark: {
-    borderColor: '#334155',
-    backgroundColor: '#0B1220',
-  },
-  requestName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  requestMainInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  requestButtons: {
-    marginTop: 6,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  requestAccept: {
-    backgroundColor: '#16A34A',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  requestDecline: {
-    backgroundColor: '#DC2626',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  requestBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  friendSearchRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  friendSearchInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    minHeight: 46,
-    backgroundColor: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  friendSearchInputDark: {
-    borderColor: '#334155',
-    backgroundColor: '#0B1220',
-  },
-  friendSearchButton: {
-    borderRadius: 10,
-    backgroundColor: '#0E7490',
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  friendSearchButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  friendResultRow: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-  },
-  friendResultRowDark: {
-    borderColor: '#334155',
-    backgroundColor: '#0B1220',
-  },
-  friendsPreviewSection: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: 8,
-  },
-  friendsPreviewSectionDark: {
-    borderTopColor: '#334155',
-  },
-  friendPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 6,
-  },
-  friendPreviewRowDark: {
-    borderColor: '#334155',
-    backgroundColor: '#0B1220',
-  },
-  friendPreviewName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
   friendsSeeAllBtn: {
     marginTop: 4,
     borderRadius: 10,
@@ -1339,29 +1246,6 @@ const styles = StyleSheet.create({
   friendsSeeAllText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '800',
-  },
-  friendResultName: {
-    fontSize: 13,
-    fontWeight: '700',
-    flex: 1,
-    paddingRight: 8,
-  },
-  friendResultMainInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  friendAddBtn: {
-    borderRadius: 999,
-    backgroundColor: '#0E7490',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  friendAddText: {
-    color: '#FFFFFF',
-    fontSize: 11,
     fontWeight: '800',
   },
   blockTitle: {
@@ -1629,6 +1513,21 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarSearchInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  avatarSearchInputDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0B1220',
   },
   avatarGrid: {
     paddingTop: 12,
