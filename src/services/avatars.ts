@@ -66,7 +66,8 @@ function mapTvToAvatar(show: TVShow): AvatarOption | null {
   };
 }
 
-function mapGameToAvatar(game: Game): AvatarOption | null {
+function mapGameToAvatar(game?: Game | null): AvatarOption | null {
+  if (!game) return null;
   const imageUrl = game.cover?.image_id
     ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${game.cover.image_id}.jpg`
     : game.cover?.url
@@ -131,4 +132,3 @@ export async function getAvatarOptions(limit = 100): Promise<AvatarOption[]> {
 
   return Array.from(dedup.values()).slice(0, limit);
 }
-
