@@ -10,7 +10,7 @@ export default function AppToaster() {
 
   return (
     <Toaster
-      richColors
+      richColors={false}
       position="top-right"
       closeButton
       options={{
@@ -21,13 +21,13 @@ export default function AppToaster() {
           collapse: 3000,
         },
         styles: {
-          title: `font-family: ${fontFamily} !important; font-weight: 700 !important; font-size: 15px !important; ${isDark ? 'color: #E5E7EB !important;' : 'color: #0F172A !important;'}`,
-          description: `font-family: ${fontFamily} !important; font-weight: 500 !important; font-size: 14px !important; ${isDark ? 'color: #CBD5E1 !important;' : 'color: #64748B !important;'}`,
-          badge: isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important;',
+          title: `font-family: ${fontFamily} !important; font-weight: 700 !important; font-size: 15px !important; line-height: 1.2 !important; ${isDark ? 'color: #F8FAFC !important; -webkit-text-fill-color: #F8FAFC !important;' : 'color: #0F172A !important;'}`,
+          description: `font-family: ${fontFamily} !important; font-weight: 500 !important; font-size: 14px !important; line-height: 1.35 !important; ${isDark ? 'color: #E2E8F0 !important; -webkit-text-fill-color: #E2E8F0 !important; opacity: 1 !important;' : 'color: #64748B !important;'}`,
+          badge: `${isDark ? 'background-color: rgba(125, 211, 252, 0.2) !important;' : 'background-color: rgba(14, 116, 144, 0.12) !important;'} width: 22px !important; height: 22px !important; min-width: 22px !important; min-height: 22px !important; border-radius: 999px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; line-height: 1 !important; padding: 0 !important;`,
           button: `${isDark ? 'background-color: rgba(255, 255, 255, 0.1) !important; color: #E5E7EB !important;' : 'background-color: rgba(0, 0, 0, 0.05) !important; color: #0F172A !important;'} font-family: ${fontFamily} !important; font-weight: 600 !important;`,
+          container: `${isDark ? 'background-color: #111827 !important; border: 1px solid #334155 !important;' : 'background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;'}`,
         },
       }}
     />
   );
 }
-

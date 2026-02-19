@@ -40,7 +40,13 @@ function FriendsScreen() {
         <TouchableOpacity style={[styles.backBtn, isDark && styles.backBtnDark]} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back-ios-new" size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mis amigos</Text>
+        <View style={styles.headerTextWrap}>
+          <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mis amigos</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>Tu círculo social en Flicksy</Text>
+        </View>
+        <View style={[styles.countBadge, isDark && styles.countBadgeDark]}>
+          <Text style={styles.countBadgeText}>{friends.length}</Text>
+        </View>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {friends.length === 0 ? (
@@ -59,15 +65,24 @@ function FriendsScreen() {
                 })
               }
             >
-              <View>
-                <Text style={[styles.name, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                  {friend.display_name || friend.username}
-                </Text>
-                <Text style={[styles.username, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                  @{friend.username}
-                </Text>
+              <View style={styles.rowMainInfo}>
+                <View style={[styles.avatarBubble, isDark && styles.avatarBubbleDark]}>
+                  <Text style={[styles.avatarBubbleText, isDark && styles.avatarBubbleTextDark]}>
+                    {(friend.display_name || friend.username || 'A').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={[styles.name, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+                    {friend.display_name || friend.username}
+                  </Text>
+                  <Text style={[styles.username, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                    @{friend.username}
+                  </Text>
+                </View>
               </View>
-              <MaterialIcons name="navigate-next" size={22} color={isDark ? '#93C5FD' : '#0369A1'} />
+              <View style={[styles.chevronCircle, isDark && styles.chevronCircleDark]}>
+                <MaterialIcons name="navigate-next" size={20} color={isDark ? '#93C5FD' : '#0369A1'} />
+              </View>
             </TouchableOpacity>
           ))
         )}
@@ -79,11 +94,14 @@ function FriendsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
+    paddingHorizontal: 20,
+    paddingTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  headerTextWrap: {
+    flex: 1,
   },
   backBtn: {
     width: 30,
@@ -99,8 +117,26 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     backgroundColor: '#111827',
   },
-  content: { padding: 16, gap: 10, paddingBottom: 24 },
+  content: { paddingHorizontal: 20, paddingTop: 18, gap: 10, paddingBottom: 24 },
   title: { fontSize: 24, fontWeight: '900' },
+  subtitle: { marginTop: -3, fontSize: 12, fontWeight: '600' },
+  countBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0E7490',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  countBadgeDark: {
+    backgroundColor: '#1D4ED8',
+  },
+  countBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
   emptyText: { fontSize: 13, fontWeight: '600' },
   row: {
     borderWidth: 1,
@@ -112,9 +148,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  rowMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   rowDark: {
     borderColor: '#1F2937',
     backgroundColor: '#111827',
+  },
+  avatarBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#CFFAFE',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+  },
+  avatarBubbleDark: {
+    backgroundColor: '#0C4A6E',
+    borderColor: '#0369A1',
+  },
+  avatarBubbleText: {
+    color: '#0E7490',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  avatarBubbleTextDark: {
+    color: '#BAE6FD',
+  },
+  chevronCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFEFF',
+  },
+  chevronCircleDark: {
+    backgroundColor: '#0F172A',
   },
   name: { fontSize: 14, fontWeight: '800' },
   username: { marginTop: 2, fontSize: 12, fontWeight: '600' },

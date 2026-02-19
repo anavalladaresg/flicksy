@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { create } from 'zustand/index.js';
 import { createJSONStorage, persist } from 'zustand/middleware.js';
 
@@ -7,11 +6,8 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 
 // Función para obtener el tema inicial según la plataforma
 function getInitialThemeMode(): ThemeMode {
-  if (Platform.OS === 'web') {
-    // En web, siempre empezar en modo claro por defecto
-    return 'light';
-  }
-  return 'system';
+  // Primer arranque siempre en claro; después persist recupera la preferencia del usuario.
+  return 'light';
 }
 
 interface PreferencesState {

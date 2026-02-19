@@ -56,11 +56,11 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
   {
     id: 'goals-first-win',
     title: 'Objetivo en marcha',
-    description: 'Cumple por primera vez un objetivo del periodo actual.',
+    description: 'Cumple al menos un objetivo semanal o mensual.',
     category: 'Objetivos',
     icon: 'flag',
     rarity: 'Comun',
-    unlockWhen: (stats) => stats.movieGoalReached || stats.gameGoalReached,
+    unlockWhen: (stats) => stats.movieGoalReached || stats.gameGoalReached || stats.goalSuccessCount >= 1,
   },
   {
     id: 'goals-double-win',
