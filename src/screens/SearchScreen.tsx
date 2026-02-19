@@ -209,6 +209,8 @@ function SearchScreen() {
     inputBorder: isDark ? '#334155' : '#CBD5E1',
     chipBg: isDark ? '#111827' : '#FFFFFF',
     chipBorder: isDark ? '#334155' : '#CBD5E1',
+    clearBg: isDark ? '#1F2937' : '#E2E8F0',
+    clearIcon: isDark ? '#CBD5E1' : '#334155',
   };
 
   return (
@@ -234,7 +236,9 @@ function SearchScreen() {
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} style={styles.clearButton}>
-              <MaterialIcons name="close" size={16} color="#334155" />
+              <View style={[styles.clearButtonInner, { backgroundColor: palette.clearBg }]}>
+                <MaterialIcons name="close" size={16} color={palette.clearIcon} />
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -406,14 +410,21 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     position: 'absolute',
-    right: 10,
-    top: 10,
+    right: 8,
+    top: '50%',
     width: 24,
     height: 24,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E2E8F0',
+    transform: [{ translateY: -12 }],
+  },
+  clearButtonInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centered: {
     flex: 1,

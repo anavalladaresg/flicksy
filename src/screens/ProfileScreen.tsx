@@ -454,18 +454,10 @@ function ProfileScreen() {
                 />
               </TouchableOpacity>
               {isSupabaseConfigured ? (
-                <TouchableOpacity style={styles.logoutButton} onPress={() => void signOut()}>
+                <TouchableOpacity style={[styles.logoutButton, isDark && styles.logoutButtonDark]} onPress={() => void signOut()}>
                   <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity
-                style={[styles.testNotificationButton, isDark && styles.testNotificationButtonDark]}
-                onPress={() => {
-                  showInAppNotification('success', 'Notificación de prueba', 'Todo funciona correctamente.');
-                }}
-              >
-                <Text style={styles.testNotificationButtonText}>Probar notificación</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -486,7 +478,7 @@ function ProfileScreen() {
                 Solicitudes ({incomingRequests.length})
               </Text>
               {incomingRequests.map((request) => (
-                <View key={request.id} style={styles.requestRow}>
+                <View key={request.id} style={[styles.requestRow, isDark && styles.requestRowDark]}>
                   <Text style={[styles.requestName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
                     {request.fromName || 'Usuario'}
                   </Text>
@@ -510,6 +502,14 @@ function ProfileScreen() {
               placeholder="Buscar por nombre de usuario"
               placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
               style={[styles.friendSearchInput, isDark && styles.friendSearchInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
+              onSubmitEditing={() => void handleSearchFriends()}
+              onKeyPress={(event) => {
+                if (event.nativeEvent.key === 'Enter') {
+                  void handleSearchFriends();
+                }
+              }}
+              returnKeyType="search"
+              blurOnSubmit={false}
             />
             <TouchableOpacity style={styles.friendSearchButton} onPress={handleSearchFriends}>
               <Text style={styles.friendSearchButtonText}>Buscar</Text>
@@ -517,7 +517,7 @@ function ProfileScreen() {
           </View>
           {!!friendMessage && <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>{friendMessage}</Text>}
           {friendResults.map((profile) => (
-            <View key={profile.id} style={styles.friendResultRow}>
+            <View key={profile.id} style={[styles.friendResultRow, isDark && styles.friendResultRowDark]}>
               <Text style={[styles.friendResultName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
                 {profile.display_name || profile.username}
               </Text>
@@ -526,7 +526,7 @@ function ProfileScreen() {
               </TouchableOpacity>
             </View>
           ))}
-          <View style={styles.friendsPreviewSection}>
+          <View style={[styles.friendsPreviewSection, isDark && styles.friendsPreviewSectionDark]}>
             <Text style={[styles.subSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Tus amigos destacados</Text>
             {friendsPreview.length === 0 ? (
               <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Aún no tienes amigos añadidos.</Text>
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
   },
   bentoHero: {
     width: '100%',
-    minHeight: 188,
+    minHeight: 160,
   },
   bentoTall: {
     minHeight: 336,
@@ -858,6 +858,7 @@ const styles = StyleSheet.create({
   profileActionsColumn: {
     minWidth: 170,
     alignItems: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 8,
   },
   themePill: {
@@ -868,6 +869,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     backgroundColor: '#F8FAFC',
     position: 'relative',
+    alignSelf: 'flex-end',
   },
   themeIconSlot: {
     width: 16,
@@ -876,13 +878,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 2,
     position: 'absolute',
-    top: 10,
+    top: '50%',
+    marginTop: -8,
   },
   themeIconSun: {
-    left: 10,
+    left: 8,
   },
   themeIconMoon: {
-    right: 10,
+    right: 7.5,
   },
   themePillDark: {
     borderColor: '#334155',
@@ -895,7 +898,8 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: '#0E7490',
     left: 5,
-    top: 7,
+    top: '50%',
+    marginTop: -11,
     transform: [{ translateX: 0 }],
   },
   themeKnobDark: {
@@ -923,36 +927,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
   },
   logoutButton: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
+    marginTop: 8,
+    alignSelf: 'flex-end',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FCA5A5',
     backgroundColor: '#FEF2F2',
     paddingHorizontal: 10,
     paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: 118,
+  },
+  logoutButtonDark: {
+    borderColor: '#7F1D1D',
+    backgroundColor: '#3F1518',
   },
   logoutButtonText: {
     color: '#B91C1C',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  testNotificationButton: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#0E7490',
-    backgroundColor: '#ECFEFF',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  testNotificationButtonDark: {
-    borderColor: '#0E7490',
-    backgroundColor: '#0F172A',
-  },
-  testNotificationButtonText: {
-    color: '#0E7490',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -1014,6 +1005,10 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#FFFFFF',
     marginBottom: 6,
+  },
+  requestRowDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0B1220',
   },
   requestName: {
     fontSize: 13,
@@ -1085,11 +1080,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
   },
+  friendResultRowDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0B1220',
+  },
   friendsPreviewSection: {
     marginTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     paddingTop: 8,
+  },
+  friendsPreviewSectionDark: {
+    borderTopColor: '#334155',
   },
   friendPreviewRow: {
     flexDirection: 'row',

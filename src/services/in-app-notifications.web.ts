@@ -48,21 +48,21 @@ function getNotificationOptions(kind: NotifyKind, isDark: boolean) {
   const palette = (() => {
     if (kind === 'success') {
       return isDark
-        ? { fill: '#052E1B', title: '#DCFCE7', description: '#BBF7D0', accent: '#22C55E' }
+        ? { fill: '#064E3B', title: '#F8FAFC', description: '#E2E8F0', accent: '#34D399' }
         : { fill: '#ECFDF3', title: '#14532D', description: '#166534', accent: '#16A34A' };
     }
     if (kind === 'error') {
       return isDark
-        ? { fill: '#3B0A0A', title: '#FEE2E2', description: '#FECACA', accent: '#EF4444' }
+        ? { fill: '#7F1D1D', title: '#F8FAFC', description: '#E2E8F0', accent: '#F87171' }
         : { fill: '#FEF2F2', title: '#7F1D1D', description: '#991B1B', accent: '#DC2626' };
     }
     if (kind === 'warning') {
       return isDark
-        ? { fill: '#3B2A03', title: '#FEF3C7', description: '#FDE68A', accent: '#F59E0B' }
+        ? { fill: '#78350F', title: '#F8FAFC', description: '#E2E8F0', accent: '#FBBF24' }
         : { fill: '#FFFBEB', title: '#78350F', description: '#92400E', accent: '#D97706' };
     }
     return isDark
-      ? { fill: '#082F49', title: '#E0F2FE', description: '#BAE6FD', accent: '#0EA5E9' }
+      ? { fill: '#0C4A6E', title: '#F8FAFC', description: '#E2E8F0', accent: '#38BDF8' }
       : { fill: '#F0F9FF', title: '#0C4A6E', description: '#075985', accent: '#0284C7' };
   })();
 
@@ -74,11 +74,11 @@ function getNotificationOptions(kind: NotifyKind, isDark: boolean) {
     fill: palette.fill,
     roundness: 16,
     styles: {
-      title: `font-family: ${fontFamily} !important; font-weight: 800 !important; font-size: 15px !important; line-height: 1.25 !important; color: ${palette.title} !important; text-align: center !important; width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; margin: 0 !important; padding: 0 !important;`,
-      description: `font-family: ${fontFamily} !important; font-weight: 600 !important; font-size: 13px !important; line-height: 1.3 !important; color: ${palette.description} !important; text-align: center !important; width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; margin: 0 !important; padding: 0 !important;`,
-      badge: `background-color: ${palette.accent} !important;`,
+      title: `font-family: ${fontFamily} !important; font-weight: 800 !important; font-size: 15px !important; line-height: 1.25 !important; color: ${palette.title} !important; -webkit-text-fill-color: ${palette.title} !important; text-align: left !important; opacity: 1 !important;`,
+      description: `font-family: ${fontFamily} !important; font-weight: 600 !important; font-size: 13px !important; line-height: 1.35 !important; color: ${palette.description} !important; -webkit-text-fill-color: ${palette.description} !important; opacity: 1 !important;`,
+      badge: `background-color: ${palette.accent} !important; color: #FFFFFF !important; width: 22px !important; height: 22px !important; min-width: 22px !important; min-height: 22px !important; border-radius: 999px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; line-height: 1 !important; text-align: center !important; padding: 0 !important;`,
       button: `background-color: ${palette.accent}22 !important; color: ${palette.title} !important; font-family: ${fontFamily} !important; font-weight: 700 !important;`,
-      container: `border: 1px solid ${palette.accent}55 !important; box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24) !important;`,
+      container: `border: 1px solid ${palette.accent}66 !important; box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35) !important; color: ${palette.title} !important;`,
     },
   };
 }
