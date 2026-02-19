@@ -44,6 +44,8 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const [status, setStatus] = useState<'planned' | 'playing' | 'completed'>('playing');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
+  const [startedAtApproximate, setStartedAtApproximate] = useState(false);
+  const [finishedAtApproximate, setFinishedAtApproximate] = useState(false);
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
@@ -114,15 +116,40 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
     : game?.cover?.url
       ? `https:${game.cover.url}`.replace('/t_thumb/', '/t_1080p/')
       : null;
+  const developerStudios = Array.from(
+    new Set(
+      (game.involved_companies ?? [])
+        .filter((entry) => entry.developer)
+        .map((entry) => entry.company?.name)
+        .filter((name): name is string => Boolean(name))
+    )
+  );
+  const screenshotUrls = (game.screenshots ?? [])
+    .map((shot) =>
+      shot.image_id
+        ? `https://images.igdb.com/igdb/image/upload/t_screenshot_big/${shot.image_id}.jpg`
+        : shot.url
+          ? shot.url.startsWith('//')
+            ? `https:${shot.url}`.replace('/t_thumb/', '/t_screenshot_big/')
+            : shot.url.replace('/t_thumb/', '/t_screenshot_big/')
+          : null
+    )
+    .filter((url): url is string => Boolean(url))
+    .slice(0, 10);
 
   const handleConfirmAdd = () => {
     if (!game) return;
+    const canSaveScore = status !== 'planned';
+    const canSaveStart = status === 'playing' || status === 'completed';
+    const canSaveEnd = status === 'completed';
     if (trackedGameItem) {
       updateTrackedItem(trackedGameItem.id, {
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        startedAt: startedAt.trim() || undefined,
-        finishedAt: finishedAt.trim() || undefined,
+        startedAt: canSaveStart ? startedAt.trim() || undefined : undefined,
+        finishedAt: canSaveEnd ? finishedAt.trim() || undefined : undefined,
+        startedAtApproximate: canSaveStart ? startedAtApproximate : false,
+        finishedAtApproximate: canSaveEnd ? finishedAtApproximate : false,
         releaseYear:
           game.release_dates && game.release_dates.length > 0
             ? new Date(game.release_dates[0].date * 1000).getFullYear()
@@ -140,10 +167,12 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         mediaType: 'game',
         title: game.name,
         posterPath: gameCoverUrl || undefined,
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        startedAt: startedAt.trim() || undefined,
-        finishedAt: finishedAt.trim() || undefined,
+        startedAt: canSaveStart ? startedAt.trim() || undefined : undefined,
+        finishedAt: canSaveEnd ? finishedAt.trim() || undefined : undefined,
+        startedAtApproximate: canSaveStart ? startedAtApproximate : false,
+        finishedAtApproximate: canSaveEnd ? finishedAtApproximate : false,
         releaseYear:
           game.release_dates && game.release_dates.length > 0
             ? new Date(game.release_dates[0].date * 1000).getFullYear()
@@ -164,6 +193,8 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
     );
     setStartedAt(trackedGameItem.startedAt ?? '');
     setFinishedAt(trackedGameItem.finishedAt ?? '');
+    setStartedAtApproximate(Boolean(trackedGameItem.startedAtApproximate));
+    setFinishedAtApproximate(Boolean(trackedGameItem.finishedAtApproximate));
     setIsRatingOpen(true);
   }
 
@@ -233,6 +264,8 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
                 setStatus('playing');
                 setStartedAt('');
                 setFinishedAt('');
+                setStartedAtApproximate(false);
+                setFinishedAtApproximate(false);
                 setIsRatingOpen(true);
               }}
             >
@@ -329,6 +362,34 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
             </>
           )}
 
+          {developerStudios.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Estudio / Desarrollador</Text>
+              <View style={styles.platforms}>
+                {developerStudios.map((studio) => (
+                  <View key={studio} style={[styles.platformTag, styles.developerTag]}>
+                    <Text style={[styles.platformText, styles.developerText]}>{studio}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {screenshotUrls.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Screenshots</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.screenshotsRow}
+              >
+                {screenshotUrls.map((url, index) => (
+                  <Image key={`${url}-${index}`} source={{ uri: url }} style={styles.screenshotImage} resizeMode="cover" />
+                ))}
+              </ScrollView>
+            </>
+          )}
+
           {game.summary && (
             <>
               <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
@@ -361,10 +422,14 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         ]}
         startedAt={startedAt}
         finishedAt={finishedAt}
+        startedAtApproximate={startedAtApproximate}
+        finishedAtApproximate={finishedAtApproximate}
         onChange={setRating}
         onChangeStatus={(next) => setStatus(next as 'planned' | 'playing' | 'completed')}
         onChangeStartedAt={setStartedAt}
         onChangeFinishedAt={setFinishedAt}
+        onChangeStartedAtApproximate={setStartedAtApproximate}
+        onChangeFinishedAtApproximate={setFinishedAtApproximate}
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
       />
@@ -623,6 +688,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6D28D9',
     fontWeight: '700',
+  },
+  developerTag: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+  },
+  developerText: {
+    color: '#3730A3',
+  },
+  screenshotsRow: {
+    gap: 10,
+    paddingBottom: 6,
+    marginBottom: 14,
+  },
+  screenshotImage: {
+    width: 220,
+    height: 124,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#0F172A',
   },
   sectionTitle: {
     fontSize: 13,

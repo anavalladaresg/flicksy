@@ -54,6 +54,26 @@ function periodKey(date: Date, period: 'weekly' | 'monthly'): string {
   return `W-${mondayWeekKey(date)}`;
 }
 
+function hasApproximateDateFlag(item: any): boolean {
+  return Boolean(item.watchedAtApproximate || item.startedAtApproximate || item.finishedAtApproximate);
+}
+
+function metricDateForMovie(item: any): string | null {
+  if (item.mediaType !== 'movie') return null;
+  if (item.watchedAt && !item.watchedAtApproximate) return item.watchedAt;
+  if (item.finishedAt && !item.finishedAtApproximate) return item.finishedAt;
+  if (hasApproximateDateFlag(item)) return null;
+  return item.dateAdded || null;
+}
+
+function metricDateForGame(item: any): string | null {
+  if (item.mediaType !== 'game') return null;
+  if (item.finishedAt && !item.finishedAtApproximate) return item.finishedAt;
+  if (item.startedAt && !item.startedAtApproximate) return item.startedAt;
+  if (hasApproximateDateFlag(item)) return null;
+  return item.dateAdded || null;
+}
+
 function AchievementUnlockWatcher() {
   const trackedItems = useTrackingStore((state) => state.items);
   const alertsAchievements = usePreferencesStore((state) => state.alertsAchievements);
@@ -76,7 +96,9 @@ function AchievementUnlockWatcher() {
     const key = periodKey(now, movieGoalPeriod);
     return trackedItems.filter((item) => {
       if (item.mediaType !== 'movie') return false;
-      const date = new Date(item.watchedAt || item.finishedAt || item.dateAdded);
+      const metricDate = metricDateForMovie(item);
+      if (!metricDate) return false;
+      const date = new Date(metricDate);
       if (Number.isNaN(date.getTime())) return false;
       return periodKey(date, movieGoalPeriod) === key;
     }).length;
@@ -87,7 +109,9 @@ function AchievementUnlockWatcher() {
     const key = periodKey(now, gameGoalPeriod);
     return trackedItems.filter((item) => {
       if (item.mediaType !== 'game' || item.status !== 'completed') return false;
-      const date = new Date(item.finishedAt || item.dateAdded);
+      const metricDate = metricDateForGame(item);
+      if (!metricDate) return false;
+      const date = new Date(metricDate);
       if (Number.isNaN(date.getTime())) return false;
       return periodKey(date, gameGoalPeriod) === key;
     }).length;

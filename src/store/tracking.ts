@@ -288,9 +288,24 @@ export const useTrackingStore = create<TrackingState>()(
         }
 
         const remoteItems = remoteRows.map(rowToTrackedItem);
+        const localFlagsByKey = new Map(
+          get().items.map((item) => [
+            `${item.mediaType}-${item.externalId}`,
+            {
+              watchedAtApproximate: item.watchedAtApproximate,
+              startedAtApproximate: item.startedAtApproximate,
+              finishedAtApproximate: item.finishedAtApproximate,
+            },
+          ])
+        );
+        const mergedItems = remoteItems.map((item) => {
+          const flags = localFlagsByKey.get(`${item.mediaType}-${item.externalId}`);
+          if (!flags) return item;
+          return { ...item, ...flags };
+        });
 
         set({
-          items: remoteItems,
+          items: mergedItems,
           remoteReady: true,
         });
       },

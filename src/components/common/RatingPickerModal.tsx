@@ -26,13 +26,19 @@ interface RatingPickerModalProps {
   statusOptions: StatusOption[];
   dateMode?: 'single' | 'range';
   watchedAt?: string;
+  watchedAtApproximate?: boolean;
   startedAt: string;
   finishedAt: string;
+  startedAtApproximate?: boolean;
+  finishedAtApproximate?: boolean;
   onChange: (value: number) => void;
   onChangeStatus: (value: string) => void;
   onChangeWatchedAt?: (value: string) => void;
+  onChangeWatchedAtApproximate?: (value: boolean) => void;
   onChangeStartedAt: (value: string) => void;
   onChangeFinishedAt: (value: string) => void;
+  onChangeStartedAtApproximate?: (value: boolean) => void;
+  onChangeFinishedAtApproximate?: (value: boolean) => void;
   onCancel: () => void;
   onConfirm: () => void;
   onConfirmAndGoBack?: () => void;
@@ -52,13 +58,19 @@ function RatingPickerModal({
   statusOptions,
   dateMode = 'range',
   watchedAt = '',
+  watchedAtApproximate = false,
   startedAt,
   finishedAt,
+  startedAtApproximate = false,
+  finishedAtApproximate = false,
   onChange,
   onChangeStatus,
   onChangeWatchedAt,
+  onChangeWatchedAtApproximate,
   onChangeStartedAt,
   onChangeFinishedAt,
+  onChangeStartedAtApproximate,
+  onChangeFinishedAtApproximate,
   onCancel,
   onConfirm,
   onConfirmAndGoBack,
@@ -129,6 +141,10 @@ function RatingPickerModal({
     dateMode === 'range' &&
     Boolean(startedAt && finishedAt) &&
     new Date(finishedAt).getTime() < new Date(startedAt).getTime();
+  const isPlanned = status === 'planned';
+  const isInProgress = status === 'watching' || status === 'playing';
+  const showRangeDates = dateMode === 'range' && status === 'completed';
+  const showStartOnlyDate = dateMode === 'range' && (status === 'watching' || status === 'playing');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -164,54 +180,80 @@ function RatingPickerModal({
             </View>
           </View>
 
-          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Mi puntuación {value.toFixed(1)} / 10</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
+            {isInProgress ? 'Mi puntuación provisional' : 'Mi puntuación'} {value.toFixed(1)} / 10
+          </Text>
 
-          <View style={styles.starsRow}>
-            <View
-              ref={starsTrackRef}
-              style={styles.starsTrack}
-              {...(Platform.OS === 'web' ? { 'data-stars-track': true } : {})}
-              onLayout={(event) => {
-                setStarsWidth(event.nativeEvent.layout.width);
-                measureTrack();
-              }}
-              {...panResponder.panHandlers}
-            >
-              {Array.from({ length: 10 }, (_, idx) => idx + 1).map((index) => (
-                <View key={index} style={styles.starSlot}>
-                  <MaterialIcons name={iconNameFor(value, index)} size={23} color="#F59E0B" />
-                </View>
-              ))}
+          {isPlanned ? (
+            <Text style={[styles.dateHintText, { marginTop: 10, color: isDark ? '#94A3B8' : '#64748B' }]}>
+              En estado Pendiente no puedes añadir puntuación.
+            </Text>
+          ) : (
+            <View style={styles.starsRow}>
+              <View
+                ref={starsTrackRef}
+                style={styles.starsTrack}
+                {...(Platform.OS === 'web' ? { 'data-stars-track': true } : {})}
+                onLayout={(event) => {
+                  setStarsWidth(event.nativeEvent.layout.width);
+                  measureTrack();
+                }}
+                {...panResponder.panHandlers}
+              >
+                {Array.from({ length: 10 }, (_, idx) => idx + 1).map((index) => (
+                  <View key={index} style={styles.starSlot}>
+                    <MaterialIcons name={iconNameFor(value, index)} size={23} color="#F59E0B" />
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.datesBlock}>
-            {dateMode === 'single' ? (
+            {dateMode === 'single' && status === 'completed' ? (
               <CalendarInput
                 label="Fecha visualización"
                 value={watchedAt}
                 onChange={onChangeWatchedAt ?? (() => undefined)}
+                approximate={watchedAtApproximate}
+                onChangeApproximate={onChangeWatchedAtApproximate}
+                placeholder="Seleccionar"
+              />
+            ) : dateMode === 'single' ? (
+              <Text style={[styles.dateHintText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                Cambia el estado a Completado para añadir fecha.
+              </Text>
+            ) : showRangeDates ? (
+              <CalendarInput
+                label="Periodo (inicio y fin)"
+                value=""
+                onChange={() => undefined}
+                mode="range"
+                rangeStart={startedAt}
+                rangeEnd={finishedAt}
+                onChangeRange={(start, end) => {
+                  onChangeStartedAt(start);
+                  onChangeFinishedAt(end);
+                }}
+                onChangeApproximateRange={(startApprox, endApprox) => {
+                  onChangeStartedAtApproximate?.(startApprox);
+                  onChangeFinishedAtApproximate?.(endApprox);
+                }}
+                placeholder="Seleccionar rango"
+              />
+            ) : showStartOnlyDate ? (
+              <CalendarInput
+                label="Fecha inicio"
+                value={startedAt}
+                onChange={onChangeStartedAt}
+                approximate={startedAtApproximate}
+                onChangeApproximate={onChangeStartedAtApproximate}
                 placeholder="Seleccionar"
               />
             ) : (
-              <View style={styles.datesRow}>
-                <View style={styles.dateCol}>
-                  <CalendarInput
-                    label="Fecha inicio"
-                    value={startedAt}
-                    onChange={onChangeStartedAt}
-                    placeholder="Seleccionar"
-                  />
-                </View>
-                <View style={styles.dateCol}>
-                  <CalendarInput
-                    label="Fecha fin"
-                    value={finishedAt}
-                    onChange={onChangeFinishedAt}
-                    placeholder="Seleccionar"
-                  />
-                </View>
-              </View>
+              <Text style={[styles.dateHintText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                Cambia el estado a Viendo/Jugando o Completado para añadir fechas.
+              </Text>
             )}
           </View>
           {hasInvalidRange && (
@@ -333,6 +375,10 @@ const styles = StyleSheet.create({
   },
   datesBlock: {
     marginTop: 14,
+  },
+  dateHintText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   datesRow: {
     flexDirection: 'row',

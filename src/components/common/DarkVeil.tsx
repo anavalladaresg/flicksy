@@ -1,5 +1,3 @@
-import React from 'react';
-
 type DarkVeilProps = {
   hueShift?: number;
   noiseIntensity?: number;

@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
     Image,
+    Linking,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -41,9 +42,11 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'completed'>('planned');
+  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('planned');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
+  const [startedAtApproximate, setStartedAtApproximate] = useState(false);
+  const [finishedAtApproximate, setFinishedAtApproximate] = useState(false);
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
@@ -83,8 +86,9 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     };
   }, [tvId]);
 
-  function statusLabel(value: 'planned' | 'completed') {
+  function statusLabel(value: 'planned' | 'watching' | 'completed') {
     if (value === 'planned') return 'Pendiente';
+    if (value === 'watching') return 'Viendo';
     return 'Vista';
   }
 
@@ -93,8 +97,9 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     return `${value.toFixed(1)}/10`;
   }
 
-  function statusTone(value: 'planned' | 'completed') {
+  function statusTone(value: 'planned' | 'watching' | 'completed') {
     if (value === 'planned') return { color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' };
+    if (value === 'watching') return { color: '#0369A1', bg: '#E0F2FE', border: '#7DD3FC' };
     return { color: '#15803D', bg: '#DCFCE7', border: '#86EFAC' };
   }
 
@@ -107,15 +112,30 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     const year = date.getFullYear();
     return `${day}/${month}/${year}`;
   }
+  const trailerVideo = show?.videos?.results?.find(
+    (video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser')
+  );
+  const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
+
+  async function openTrailer() {
+    if (!trailerUrl) return;
+    const supported = await Linking.canOpenURL(trailerUrl);
+    if (supported) await Linking.openURL(trailerUrl);
+  }
 
   const handleConfirmAdd = () => {
     if (!show) return;
+    const canSaveScore = status !== 'planned';
+    const canSaveStart = status === 'watching' || status === 'completed';
+    const canSaveEnd = status === 'completed';
     if (trackedTVItem) {
       updateTrackedItem(trackedTVItem.id, {
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        startedAt: startedAt.trim() || undefined,
-        finishedAt: finishedAt.trim() || undefined,
+        startedAt: canSaveStart ? startedAt.trim() || undefined : undefined,
+        finishedAt: canSaveEnd ? finishedAt.trim() || undefined : undefined,
+        startedAtApproximate: canSaveStart ? startedAtApproximate : false,
+        finishedAtApproximate: canSaveEnd ? finishedAtApproximate : false,
         releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
         genres: show.genres?.map((genre) => genre.name) ?? [],
         estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
@@ -130,10 +150,12 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         mediaType: 'tv',
         title: show.name,
         posterPath: show.poster_path || undefined,
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        startedAt: startedAt.trim() || undefined,
-        finishedAt: finishedAt.trim() || undefined,
+        startedAt: canSaveStart ? startedAt.trim() || undefined : undefined,
+        finishedAt: canSaveEnd ? finishedAt.trim() || undefined : undefined,
+        startedAtApproximate: canSaveStart ? startedAtApproximate : false,
+        finishedAtApproximate: canSaveEnd ? finishedAtApproximate : false,
         releaseYear: show.first_air_date ? new Date(show.first_air_date).getFullYear() : undefined,
         genres: show.genres?.map((genre) => genre.name) ?? [],
         estimatedHours: show.number_of_episodes ? Math.round(show.number_of_episodes * 0.75) : undefined,
@@ -147,10 +169,12 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     if (!trackedTVItem) return;
     setRating(trackedTVItem.rating ?? 0);
     setStatus(
-      (trackedTVItem.status as 'planned' | 'completed') || 'planned'
+      (trackedTVItem.status as 'planned' | 'watching' | 'completed') || 'planned'
     );
     setStartedAt(trackedTVItem.startedAt ?? '');
     setFinishedAt(trackedTVItem.finishedAt ?? '');
+    setStartedAtApproximate(Boolean(trackedTVItem.startedAtApproximate));
+    setFinishedAtApproximate(Boolean(trackedTVItem.finishedAtApproximate));
     setIsRatingOpen(true);
   }
 
@@ -219,6 +243,8 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
                   setStatus('planned');
                   setStartedAt('');
                   setFinishedAt('');
+                  setStartedAtApproximate(false);
+                  setFinishedAtApproximate(false);
                   setIsRatingOpen(true);
                 }
               }}
@@ -296,6 +322,13 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
             </View>
           </View>
 
+          {trailerUrl ? (
+            <TouchableOpacity style={[styles.trailerButton, isDark && styles.trailerButtonDark]} onPress={() => void openTrailer()}>
+              <MaterialIcons name="play-circle-filled" size={18} color="#FFFFFF" />
+              <Text style={styles.trailerButtonText}>Ver tráiler</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {show.genres && show.genres.length > 0 && (
             <View style={styles.genres}>
               {show.genres.map((genre) => (
@@ -320,14 +353,19 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
         status={status}
         statusOptions={[
           { value: 'planned', label: 'Pendiente', color: '#64748B' },
+          { value: 'watching', label: 'Viendo', color: '#0284C7' },
           { value: 'completed', label: 'Visto', color: '#16A34A' },
         ]}
         startedAt={startedAt}
         finishedAt={finishedAt}
+        startedAtApproximate={startedAtApproximate}
+        finishedAtApproximate={finishedAtApproximate}
         onChange={setRating}
-        onChangeStatus={(next) => setStatus(next as 'planned' | 'completed')}
+        onChangeStatus={(next) => setStatus(next as 'planned' | 'watching' | 'completed')}
         onChangeStartedAt={setStartedAt}
         onChangeFinishedAt={setFinishedAt}
+        onChangeStartedAtApproximate={setStartedAtApproximate}
+        onChangeFinishedAtApproximate={setFinishedAtApproximate}
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
         onConfirmAndGoBack={() => {
@@ -552,6 +590,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#334155',
     fontWeight: '700',
+  },
+  trailerButton: {
+    marginTop: -2,
+    marginBottom: 14,
+    borderRadius: 12,
+    backgroundColor: '#0E7490',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trailerButtonDark: {
+    backgroundColor: '#1E40AF',
+  },
+  trailerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   genres: {
     flexDirection: 'row',

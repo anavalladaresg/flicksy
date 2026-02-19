@@ -196,7 +196,10 @@ export class GameRepository implements IGameRepository {
         '/games',
         `
           fields id,name,summary,cover.url,cover.image_id,rating,genres.name,
-                  platforms.name,release_dates.date,storyline;
+                  platforms.name,release_dates.date,storyline,
+                  screenshots.image_id,screenshots.url,
+                  involved_companies.developer,involved_companies.publisher,
+                  involved_companies.company.name,involved_companies.company.id;
           where id = ${id};
         `,
         {

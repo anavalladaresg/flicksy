@@ -28,6 +28,12 @@ const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 const ITEMS_PER_SECTION = 30;
 const RECOMMENDATION_ITEMS = 30;
 const SAFE_RATIO = 0.8;
+const HOME_CARD_WIDTH = 148;
+const HOME_CARD_GAP = 10;
+const HOME_CARD_SNAP = HOME_CARD_WIDTH + HOME_CARD_GAP;
+const FRIEND_CARD_WIDTH = 186;
+const FRIEND_CARD_GAP = 10;
+const FRIEND_CARD_SNAP = FRIEND_CARD_WIDTH + FRIEND_CARD_GAP;
 
 type CardItem = { id: number; name: string; imageUrl: string | null; rating?: number };
 type RecommendationItem = CardItem & {
@@ -153,6 +159,10 @@ function SectionRow({
         keyExtractor={(item) => item.id.toString()}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        snapToInterval={HOME_CARD_SNAP}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        bounces={false}
         onScroll={(event) => {
           // Guardar el offset actual para el scroll con rueda
           if (Platform.OS === 'web') {
@@ -160,7 +170,7 @@ function SectionRow({
           }
         }}
         scrollEventThrottle={8}
-        decelerationRate="normal"
+        decelerationRate="fast"
         {...(Platform.OS === 'web' ? {
           // Mejorar el scroll suave en web
           style: { 
@@ -299,6 +309,10 @@ function PersonalizedRow({
         keyExtractor={(item) => `${item.mediaType}-${item.id}`}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        snapToInterval={HOME_CARD_SNAP}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        bounces={false}
         onScroll={(event) => {
           // Guardar el offset actual para el scroll con rueda
           if (Platform.OS === 'web') {
@@ -306,7 +320,7 @@ function PersonalizedRow({
           }
         }}
         scrollEventThrottle={8}
-        decelerationRate="normal"
+        decelerationRate="fast"
         {...(Platform.OS === 'web' ? {
           // Mejorar el scroll suave en web
           style: { 
@@ -445,6 +459,10 @@ function FriendsActivityRow({
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          snapToInterval={FRIEND_CARD_SNAP}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          bounces={false}
           onScroll={(event) => {
             // Guardar el offset actual para el scroll con rueda
             if (Platform.OS === 'web') {
@@ -818,19 +836,20 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 12,
+    paddingRight: 18,
   },
   card: {
-    width: 140,
-    marginHorizontal: 4,
+    width: HOME_CARD_WIDTH,
+    marginHorizontal: HOME_CARD_GAP / 2,
     position: 'relative',
   },
   friendCard: {
-    width: 180,
+    width: FRIEND_CARD_WIDTH,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 10,
-    marginHorizontal: 4,
+    marginHorizontal: FRIEND_CARD_GAP / 2,
     backgroundColor: '#FFFFFF',
   },
   friendCardDark: {
@@ -859,7 +878,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   poster: {
-    width: 140,
+    width: HOME_CARD_WIDTH,
     height: 200,
     borderRadius: 12,
     backgroundColor: '#E2E8F0',
@@ -927,5 +946,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export { HomeScreen };
 export default HomeScreen;

@@ -12,6 +12,7 @@ function getInitialThemeMode(): ThemeMode {
 
 interface PreferencesState {
   username: string;
+  profileAvatarUrl: string | null;
   themeMode: ThemeMode;
   alertsAchievements: boolean;
   alertsFriendRequests: boolean;
@@ -28,6 +29,7 @@ interface PreferencesState {
   seenAchievementIds: string[];
   unlockedAchievementIds: string[];
   setUsername: (username: string) => void;
+  setProfileAvatarUrl: (url: string | null) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setAlertsAchievements: (enabled: boolean) => void;
   setAlertsFriendRequests: (enabled: boolean) => void;
@@ -50,6 +52,7 @@ export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
       username: 'anavalladares',
+      profileAvatarUrl: null,
       themeMode: getInitialThemeMode(),
       alertsAchievements: true,
       alertsFriendRequests: true,
@@ -66,6 +69,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       seenAchievementIds: [],
       unlockedAchievementIds: [],
       setUsername: (username) => set({ username }),
+      setProfileAvatarUrl: (profileAvatarUrl) => set({ profileAvatarUrl }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setAlertsAchievements: (alertsAchievements) => set({ alertsAchievements }),
       setAlertsFriendRequests: (alertsFriendRequests) => set({ alertsFriendRequests }),

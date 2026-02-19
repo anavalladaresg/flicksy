@@ -1,3 +1,3 @@
-import TrackedScreen from '@/src/screens/TrackedScreen';
+import TrackedTabScreen from '@/src/screens/TrackedScreen';
 
-export default TrackedScreen;
+export default TrackedTabScreen;

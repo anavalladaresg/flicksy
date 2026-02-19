@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Image,
@@ -14,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { TMDB_IMAGE_BASE_URL } from '../constants/config';
+import { STORAGE_KEYS, TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useSearchGames } from '../features/games/presentation/hooks';
 import { useSearchMovies } from '../features/movies/presentation/hooks';
 import { useSearchTVShows } from '../features/tv/presentation/hooks';
@@ -70,6 +71,11 @@ function containsAllWords(value: string, normalizedQuery: string): boolean {
   return words.every((word) => normalizedValue.includes(word));
 }
 
+function containsAllWordsInAny(values: (string | undefined | null)[], normalizedQuery: string): boolean {
+  const candidates = values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return candidates.some((value) => containsAllWords(value, normalizedQuery));
+}
+
 function SearchScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -79,6 +85,8 @@ function SearchScreen() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedType, setSelectedType] = useState<SearchType>('all');
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -87,9 +95,52 @@ function SearchScreen() {
     return () => clearTimeout(timeout);
   }, [query]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+        if (!raw || !mounted) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setSearchHistory(parsed.filter((item): item is string => typeof item === 'string').slice(0, 5));
+        }
+      } catch {
+        // ignore malformed storage data
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function saveSearchTerm(term: string) {
+    const cleaned = term.trim();
+    if (!cleaned) return;
+    const updated = [cleaned, ...searchHistory.filter((item) => normalizeText(item) !== normalizeText(cleaned))].slice(0, 5);
+    setSearchHistory(updated);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(updated));
+    } catch {
+      // ignore storage write errors
+    }
+  }
+
+  function applySuggestedQuery(term: string) {
+    const next = term.trim();
+    if (!next) return;
+    // Reemplaza lo escrito y ejecuta búsqueda inmediatamente.
+    setQuery(next);
+    setDebouncedQuery(next);
+    void saveSearchTerm(next);
+  }
+
   const primaryQuery = debouncedQuery.trim();
+  const typedQuery = query.trim();
+  const hasTypedQuery = typedQuery.length > 0;
   const accentlessQuery = stripDiacritics(primaryQuery);
   const normalizedQuery = normalizeText(primaryQuery);
+  const normalizedTypedQuery = normalizeText(typedQuery);
   const hasQuery = primaryQuery.length > 0;
 
   const moviesEnabled = hasQuery && (selectedType === 'all' || selectedType === 'movie');
@@ -118,7 +169,9 @@ function SearchScreen() {
       ...(moviesPrimary.data?.data ?? []),
       ...(moviesAccentless.data?.data ?? []),
     ]);
-    return merged.filter((item) => containsAllWords(item.title, normalizedQuery));
+    return merged.filter((item) =>
+      containsAllWordsInAny([item.title, (item as any).original_title], normalizedQuery)
+    );
   }, [moviesPrimary.data, moviesAccentless.data, normalizedQuery, moviesEnabled]);
 
   const tvShows = useMemo(() => {
@@ -127,7 +180,9 @@ function SearchScreen() {
       ...(tvPrimary.data?.data ?? []),
       ...(tvAccentless.data?.data ?? []),
     ]);
-    return merged.filter((item) => containsAllWords(item.name, normalizedQuery));
+    return merged.filter((item) =>
+      containsAllWordsInAny([item.name, (item as any).original_name], normalizedQuery)
+    );
   }, [tvPrimary.data, tvAccentless.data, normalizedQuery, tvEnabled]);
 
   const games = useMemo(() => {
@@ -182,6 +237,43 @@ function SearchScreen() {
     (gamesEnabled && (gamesPrimary.isFetching || gamesAccentless.isFetching));
 
   const noResults = hasQuery && !isLoading && mixedResults.length === 0;
+  const completionSuggestions = useMemo(() => {
+    if (!hasTypedQuery) return [];
+    const scored = new Map<string, { title: string; popularity: number; startsWith: boolean }>();
+
+    mixedResults.forEach((item) => {
+      const normalizedTitle = normalizeText(item.title);
+      if (!normalizedTitle.includes(normalizedTypedQuery)) return;
+      const key = normalizedTitle;
+      const startsWith = normalizedTitle.startsWith(normalizedTypedQuery);
+      const current = scored.get(key);
+      if (!current || item.popularity > current.popularity) {
+        scored.set(key, { title: item.title, popularity: item.popularity, startsWith });
+      }
+    });
+
+    // History matches are fallback if there are not enough API suggestions.
+    searchHistory.forEach((term) => {
+      const normalizedTerm = normalizeText(term);
+      if (!normalizedTerm.includes(normalizedTypedQuery)) return;
+      if (!scored.has(normalizedTerm)) {
+        scored.set(normalizedTerm, {
+          title: term,
+          popularity: -1,
+          startsWith: normalizedTerm.startsWith(normalizedTypedQuery),
+        });
+      }
+    });
+
+    return [...scored.values()]
+      .sort((a, b) => {
+        if (a.popularity !== b.popularity) return b.popularity - a.popularity;
+        if (a.startsWith !== b.startsWith) return a.startsWith ? -1 : 1;
+        return a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
+      })
+      .map((item) => item.title)
+      .slice(0, 5);
+  }, [hasTypedQuery, mixedResults, normalizedTypedQuery, searchHistory]);
 
   function toggleType(type: Exclude<SearchType, 'all'>) {
     setSelectedType((prev) => (prev === type ? 'all' : type));
@@ -233,6 +325,10 @@ function SearchScreen() {
             ]}
             autoCorrect={false}
             autoCapitalize="none"
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            onSubmitEditing={() => void saveSearchTerm(query)}
+            returnKeyType="search"
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} style={styles.clearButton}>
@@ -300,17 +396,50 @@ function SearchScreen() {
         </View>
       </View>
 
-      {!hasQuery ? (
-        <View style={styles.centered}>
-          <Text style={[styles.helperText, { color: palette.text }]}>Escribe para buscar todo el catálogo.</Text>
-          <Text style={[styles.helperSubtext, { color: palette.subtext }]}>Si marcas un tipo arriba, filtramos solo por ese tipo.</Text>
-        </View>
+      {!hasTypedQuery ? (
+        <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]} keyboardShouldPersistTaps="handled">
+          {isInputFocused && searchHistory.length > 0 ? (
+            <View style={[styles.suggestBlock, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}>
+              <Text style={[styles.suggestTitle, { color: palette.text }]}>Últimas búsquedas</Text>
+              {searchHistory.map((term) => (
+                <TouchableOpacity
+                  key={term}
+                  style={styles.suggestRow}
+                  onPress={() => applySuggestedQuery(term)}
+                >
+                  <MaterialIcons name="history" size={16} color={palette.subtext} />
+                  <Text style={[styles.suggestText, { color: palette.text }]}>{term}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.centered}>
+            <Text style={[styles.helperText, { color: palette.text }]}>Escribe para buscar todo el catálogo.</Text>
+            <Text style={[styles.helperSubtext, { color: palette.subtext }]}>Si marcas un tipo arriba, filtramos solo por ese tipo.</Text>
+          </View>
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
+          {completionSuggestions.length > 0 && (
+            <View style={[styles.suggestBlock, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}>
+              <Text style={[styles.suggestTitle, { color: palette.text }]}>Sugerencias</Text>
+              {completionSuggestions.map((title) => (
+                <TouchableOpacity
+                  key={title}
+                  style={styles.suggestRow}
+                  onPress={() => applySuggestedQuery(title)}
+                >
+                  <MaterialIcons name="search" size={16} color={palette.subtext} />
+                  <Text style={[styles.suggestText, { color: palette.text }]}>{title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           {isLoading && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color="#0E7490" />
@@ -323,7 +452,10 @@ function SearchScreen() {
               key={`${item.mediaType}-${item.id}`}
               style={[styles.item, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}
               activeOpacity={0.75}
-              onPress={() => router.push(mediaRoute(item))}
+              onPress={() => {
+                void saveSearchTerm(query || item.title);
+                router.push(mediaRoute(item));
+              }}
             >
               <Image
                 source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
@@ -460,6 +592,30 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 13,
   },
+  suggestBlock: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  suggestTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+  },
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  suggestText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -524,5 +680,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export { SearchScreen };
 export default SearchScreen;

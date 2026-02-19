@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import UserAvatar from '../components/common/UserAvatar';
 import { getFriendsList, type FriendProfile } from '../services/social';
 
 function FriendsScreen() {
@@ -66,11 +67,7 @@ function FriendsScreen() {
               }
             >
               <View style={styles.rowMainInfo}>
-                <View style={[styles.avatarBubble, isDark && styles.avatarBubbleDark]}>
-                  <Text style={[styles.avatarBubbleText, isDark && styles.avatarBubbleTextDark]}>
-                    {(friend.display_name || friend.username || 'A').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
+                <UserAvatar avatarUrl={friend.avatar_url ?? null} size={38} isDark={isDark} />
                 <View>
                   <Text style={[styles.name, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
                     {friend.display_name || friend.username}
@@ -156,28 +153,6 @@ const styles = StyleSheet.create({
   rowDark: {
     borderColor: '#1F2937',
     backgroundColor: '#111827',
-  },
-  avatarBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#CFFAFE',
-    borderWidth: 1,
-    borderColor: '#67E8F9',
-  },
-  avatarBubbleDark: {
-    backgroundColor: '#0C4A6E',
-    borderColor: '#0369A1',
-  },
-  avatarBubbleText: {
-    color: '#0E7490',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  avatarBubbleTextDark: {
-    color: '#BAE6FD',
   },
   chevronCircle: {
     width: 28,

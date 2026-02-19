@@ -3,7 +3,7 @@
  * Maneja interceptores, errores y configuración común
  */
 
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, isAxiosError } from 'axios';
 
 // Valores por defecto para APIs
 const TMDB_API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
@@ -73,7 +73,7 @@ igdbHttp.interceptors.request.use((config) => {
 
 // ============= RESPONSE ERROR HANDLER =============
 function handleError(error: unknown) {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     const message = (error.response?.data as any)?.status_message || error.message;
     return Promise.reject(new Error(message));
   }
