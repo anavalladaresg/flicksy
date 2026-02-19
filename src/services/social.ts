@@ -89,12 +89,16 @@ export interface FriendItemRating {
   status: string;
 }
 
+export interface FriendCompatibility {
+  friendId: string;
+  compatibility: number;
+  sharedItems: number;
+  sharedRatedItems: number;
+}
+
 async function getCurrentUserId(): Promise<string | null> {
   const clerk = getClerkInstance();
   const userId = clerk.user?.id ?? null;
-  if (!userId) {
-    console.warn('[social-debug] getCurrentUserId: missing Clerk user id');
-  }
   return userId;
 }
 
@@ -160,7 +164,6 @@ export async function syncOwnProfile(
     }
   }
 
-  console.log('[social-debug] syncOwnProfile:start', { userId, username: normalized });
   const basePayload: any = {
     id: userId,
     username: normalized,
@@ -179,14 +182,12 @@ export async function syncOwnProfile(
       console.warn('[social] syncOwnProfile failed:', fallbackTry.error.message);
       return;
     }
-    console.log('[social-debug] syncOwnProfile:ok', { userId });
     return;
   }
   if (firstTry.error) {
     console.warn('[social] syncOwnProfile failed:', firstTry.error.message);
     return;
   }
-  console.log('[social-debug] syncOwnProfile:ok', { userId });
 }
 
 export async function getOwnProfile(): Promise<FriendProfile | null> {
@@ -622,4 +623,98 @@ export async function getFriendsActivity(limit = 12): Promise<FriendActivityItem
   }));
 
   return mapped.slice(0, limit);
+}
+
+export async function getFriendsCompatibility(): Promise<Record<string, FriendCompatibility>> {
+  if (!supabase) return {};
+  const userId = await getCurrentUserId();
+  if (!userId) return {};
+
+  const friendIds = await getAcceptedFriendIds(userId);
+  if (friendIds.length === 0) return {};
+
+  const [ownItemsRes, friendsItemsRes] = await Promise.all([
+    supabase
+      .from('library_items')
+      .select('external_id,media_type,rating,status')
+      .eq('user_id', userId),
+    supabase
+      .from('library_items')
+      .select('user_id,external_id,media_type,rating,status')
+      .in('user_id', friendIds),
+  ]);
+
+  if (ownItemsRes.error || friendsItemsRes.error) {
+    if (ownItemsRes.error) console.warn('[social] getFriendsCompatibility own items failed:', ownItemsRes.error.message);
+    if (friendsItemsRes.error) console.warn('[social] getFriendsCompatibility friend items failed:', friendsItemsRes.error.message);
+    return {};
+  }
+
+  const ownByKey = new Map<
+    string,
+    {
+      rating: number | null;
+      status: string | null;
+    }
+  >();
+  (ownItemsRes.data ?? []).forEach((row: any) => {
+    ownByKey.set(`${row.media_type}:${row.external_id}`, {
+      rating: typeof row.rating === 'number' ? row.rating : null,
+      status: row.status ?? null,
+    });
+  });
+
+  const groupedByFriend = new Map<string, any[]>();
+  (friendsItemsRes.data ?? []).forEach((row: any) => {
+    const list = groupedByFriend.get(row.user_id) ?? [];
+    list.push(row);
+    groupedByFriend.set(row.user_id, list);
+  });
+
+  const result: Record<string, FriendCompatibility> = {};
+  friendIds.forEach((friendId) => {
+    const friendRows = groupedByFriend.get(friendId) ?? [];
+    let sharedItems = 0;
+    let sharedRatedItems = 0;
+    let ratingDiffSum = 0;
+    let statusMatches = 0;
+    let statusComparable = 0;
+
+    friendRows.forEach((row) => {
+      const own = ownByKey.get(`${row.media_type}:${row.external_id}`);
+      if (!own) return;
+
+      sharedItems += 1;
+
+      const ownRating = own.rating;
+      const friendRating = typeof row.rating === 'number' ? row.rating : null;
+      if (typeof ownRating === 'number' && typeof friendRating === 'number') {
+        sharedRatedItems += 1;
+        ratingDiffSum += Math.abs(ownRating - friendRating);
+      }
+
+      if (own.status && row.status) {
+        statusComparable += 1;
+        if (own.status === row.status) statusMatches += 1;
+      }
+    });
+
+    const ratingScore =
+      sharedRatedItems > 0 ? Math.max(0, 100 - (ratingDiffSum / sharedRatedItems) * 10) : null;
+    const statusScore = statusComparable > 0 ? (statusMatches / statusComparable) * 100 : null;
+
+    let compatibility = 0;
+    if (ratingScore !== null && statusScore !== null) compatibility = ratingScore * 0.8 + statusScore * 0.2;
+    else if (ratingScore !== null) compatibility = ratingScore;
+    else if (statusScore !== null) compatibility = statusScore;
+
+    result[friendId] = {
+      friendId,
+      compatibility: Math.round(Math.max(0, Math.min(100, compatibility))),
+      sharedItems,
+      sharedRatedItems,
+    };
+  });
+
+  return result;
 }

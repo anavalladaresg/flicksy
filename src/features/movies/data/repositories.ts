@@ -146,7 +146,7 @@ export class MovieRepository implements IMovieRepository {
     try {
       const response = await tmdbHttp.get(`/movie/${id}`, {
         params: {
-          append_to_response: 'credits,videos,translations',
+          append_to_response: 'credits,videos,translations,watch/providers',
         },
       });
 

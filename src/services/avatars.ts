@@ -132,3 +132,80 @@ export async function getAvatarOptions(limit = 100): Promise<AvatarOption[]> {
 
   return Array.from(dedup.values()).slice(0, limit);
 }
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function containsAllWords(value: string, normalizedQuery: string): boolean {
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const normalizedValue = normalizeText(value);
+  return words.every((word) => normalizedValue.includes(word));
+}
+
+export async function searchAvatarOptions(query: string): Promise<AvatarOption[]> {
+  const cleaned = query.trim();
+  if (cleaned.length < 2) return [];
+  const normalizedQuery = normalizeText(cleaned);
+  const dedup = new Map<string, AvatarOption>();
+
+  const settle = await Promise.allSettled([
+    movieRepository.searchMovies({ query: cleaned, page: 1 }),
+    movieRepository.searchMovies({ query: cleaned, page: 2 }),
+    tvRepository.searchTVShows({ query: cleaned, page: 1 }),
+    tvRepository.searchTVShows({ query: cleaned, page: 2 }),
+    gameRepository.searchGames(cleaned, 1),
+    gameRepository.searchGames(cleaned, 2),
+  ]);
+
+  const [moviePage1, moviePage2, tvPage1, tvPage2, gamePage1, gamePage2] = settle;
+
+  if (moviePage1.status === 'fulfilled') {
+    moviePage1.value.data
+      .filter((item) => containsAllWords(item.title, normalizedQuery))
+      .map((item) => mapMovieToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+  if (moviePage2.status === 'fulfilled') {
+    moviePage2.value.data
+      .filter((item) => containsAllWords(item.title, normalizedQuery))
+      .map((item) => mapMovieToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+  if (tvPage1.status === 'fulfilled') {
+    tvPage1.value.data
+      .filter((item) => containsAllWords(item.name, normalizedQuery))
+      .map((item) => mapTvToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+  if (tvPage2.status === 'fulfilled') {
+    tvPage2.value.data
+      .filter((item) => containsAllWords(item.name, normalizedQuery))
+      .map((item) => mapTvToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+  if (gamePage1.status === 'fulfilled') {
+    gamePage1.value.data
+      .filter((item) => containsAllWords(item.name, normalizedQuery))
+      .map((item) => mapGameToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+  if (gamePage2.status === 'fulfilled') {
+    gamePage2.value.data
+      .filter((item) => containsAllWords(item.name, normalizedQuery))
+      .map((item) => mapGameToAvatar(item))
+      .filter(Boolean)
+      .forEach((item) => dedup.set((item as AvatarOption).id, item as AvatarOption));
+  }
+
+  return Array.from(dedup.values());
+}

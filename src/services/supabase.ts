@@ -30,8 +30,14 @@ export const supabase = isSupabaseConfigured
   ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: authOptions,
     accessToken: async () => {
-      const clerk = getClerkInstance();
-      return (await clerk.session?.getToken()) ?? null;
+      try {
+        const clerk = getClerkInstance();
+        const session = (clerk as any)?.session;
+        if (!session?.getToken) return null;
+        return (await session.getToken()) ?? null;
+      } catch {
+        return null;
+      }
     },
   })
   : null;

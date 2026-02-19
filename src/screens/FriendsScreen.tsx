@@ -5,19 +5,23 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import UserAvatar from '../components/common/UserAvatar';
-import { getFriendsList, type FriendProfile } from '../services/social';
+import { getFriendsCompatibility, getFriendsList, type FriendProfile } from '../services/social';
 
 function FriendsScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
   const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [compatibilityByFriend, setCompatibilityByFriend] = useState<Record<string, { compatibility: number; sharedItems: number }>>({});
 
   useFocusEffect(
     React.useCallback(() => {
       let cancelled = false;
       (async () => {
-        const data = await getFriendsList();
-        if (!cancelled) setFriends(data);
+        const [data, compatibility] = await Promise.all([getFriendsList(), getFriendsCompatibility()]);
+        if (!cancelled) {
+          setFriends(data);
+          setCompatibilityByFriend(compatibility);
+        }
       })();
       return () => {
         cancelled = true;
@@ -28,8 +32,9 @@ function FriendsScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       void (async () => {
-        const data = await getFriendsList();
+        const [data, compatibility] = await Promise.all([getFriendsList(), getFriendsCompatibility()]);
         setFriends(data);
+        setCompatibilityByFriend(compatibility);
       })();
     }, 12000);
     return () => clearInterval(interval);
@@ -62,7 +67,10 @@ function FriendsScreen() {
               onPress={() =>
                 router.push({
                   pathname: `/friend/${friend.id}` as any,
-                  params: { name: friend.display_name || friend.username || 'Amigo/a' },
+                  params: {
+                    name: friend.display_name || friend.username || 'Amigo/a',
+                    avatarUrl: friend.avatar_url || '',
+                  },
                 })
               }
             >
@@ -75,6 +83,12 @@ function FriendsScreen() {
                   <Text style={[styles.username, { color: isDark ? '#94A3B8' : '#64748B' }]}>
                     @{friend.username}
                   </Text>
+                  <View style={[styles.compatibilityPill, isDark && styles.compatibilityPillDark]}>
+                    <MaterialIcons name="favorite" size={12} color={isDark ? '#7DD3FC' : '#0E7490'} />
+                    <Text style={[styles.compatibilityText, { color: isDark ? '#CFFAFE' : '#0F172A' }]}>
+                      Compatibilidad {compatibilityByFriend[friend.id]?.compatibility ?? 0}% · {compatibilityByFriend[friend.id]?.sharedItems ?? 0} en común
+                    </Text>
+                  </View>
                 </View>
               </View>
               <View style={[styles.chevronCircle, isDark && styles.chevronCircleDark]}>
@@ -167,6 +181,27 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 14, fontWeight: '800' },
   username: { marginTop: 2, fontSize: 12, fontWeight: '600' },
+  compatibilityPill: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#CFFAFE',
+    borderRadius: 999,
+    backgroundColor: '#ECFEFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  compatibilityPillDark: {
+    borderColor: '#164E63',
+    backgroundColor: '#082F49',
+  },
+  compatibilityText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });
 
 export default FriendsScreen;

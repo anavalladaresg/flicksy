@@ -11,6 +11,30 @@ import { Game, PaginatedResponse } from '../../../types';
 import { GameSortOption, IGameRepository, Period } from '../domain/repositories';
 
 const LIMIT_PER_PAGE = 20;
+const isWebRuntime = typeof window !== 'undefined';
+const IGDB_BACKOFF_MS = 120000;
+let igdbUnavailableUntil = 0;
+
+function emptyPage(page = 1): PaginatedResponse<Game> {
+  return {
+    data: [],
+    page,
+    totalPages: 1,
+    totalResults: 0,
+  };
+}
+
+function shouldSkipIgdbRequest(): boolean {
+  return isWebRuntime && Date.now() < igdbUnavailableUntil;
+}
+
+function applyIgdbBackoff(error: unknown) {
+  if (!isWebRuntime) return;
+  const message = String((error as any)?.message || '').toLowerCase();
+  if (message.includes('load failed') || message.includes('network error') || message.includes('failed to fetch')) {
+    igdbUnavailableUntil = Date.now() + IGDB_BACKOFF_MS;
+  }
+}
 
 function getUnixDateRange(period: Period): { start: number; end: number } {
   const end = Math.floor(Date.now() / 1000);
@@ -21,6 +45,7 @@ function getUnixDateRange(period: Period): { start: number; end: number } {
 
 export class GameRepository implements IGameRepository {
   async getPopularGames(page: number = 1): Promise<PaginatedResponse<Game>> {
+    if (shouldSkipIgdbRequest()) return emptyPage(page);
     try {
       const offset = (page - 1) * LIMIT_PER_PAGE;
 
@@ -48,11 +73,14 @@ export class GameRepository implements IGameRepository {
         totalResults: 1000,
       };
     } catch (error) {
+      applyIgdbBackoff(error);
+      if (isWebRuntime) return emptyPage(page);
       throw handleApiError(error);
     }
   }
 
   async searchGames(query: string, page: number = 1): Promise<PaginatedResponse<Game>> {
+    if (shouldSkipIgdbRequest()) return emptyPage(page);
     try {
       const offset = (page - 1) * LIMIT_PER_PAGE;
 
@@ -79,6 +107,8 @@ export class GameRepository implements IGameRepository {
         totalResults: response.data.length,
       };
     } catch (error) {
+      applyIgdbBackoff(error);
+      if (isWebRuntime) return emptyPage(page);
       throw handleApiError(error);
     }
   }
@@ -87,6 +117,7 @@ export class GameRepository implements IGameRepository {
     sortBy: GameSortOption,
     page: number = 1
   ): Promise<PaginatedResponse<Game>> {
+    if (shouldSkipIgdbRequest()) return emptyPage(page);
     try {
       const offset = (page - 1) * LIMIT_PER_PAGE;
       const where =
@@ -121,11 +152,14 @@ export class GameRepository implements IGameRepository {
         totalResults: 1000,
       };
     } catch (error) {
+      applyIgdbBackoff(error);
+      if (isWebRuntime) return emptyPage(page);
       throw handleApiError(error);
     }
   }
 
   async getNewGames(period: Period): Promise<PaginatedResponse<Game>> {
+    if (shouldSkipIgdbRequest()) return emptyPage(1);
     try {
       const { start, end } = getUnixDateRange(period);
       const response = await igdbHttp.post(
@@ -153,11 +187,14 @@ export class GameRepository implements IGameRepository {
         totalResults: response.data.length,
       };
     } catch (error) {
+      applyIgdbBackoff(error);
+      if (isWebRuntime) return emptyPage(1);
       throw handleApiError(error);
     }
   }
 
   async getTrendingGames(period: Period): Promise<PaginatedResponse<Game>> {
+    if (shouldSkipIgdbRequest()) return emptyPage(1);
     try {
       const { start, end } = getUnixDateRange(period);
       const response = await igdbHttp.post(
@@ -186,11 +223,16 @@ export class GameRepository implements IGameRepository {
         totalResults: response.data.length,
       };
     } catch (error) {
+      applyIgdbBackoff(error);
+      if (isWebRuntime) return emptyPage(1);
       throw handleApiError(error);
     }
   }
 
   async getGameDetails(id: number): Promise<Game> {
+    if (shouldSkipIgdbRequest()) {
+      throw handleApiError(new Error('Servicio de juegos no disponible temporalmente.'));
+    }
     try {
       const response = await igdbHttp.post(
         '/games',
@@ -216,6 +258,7 @@ export class GameRepository implements IGameRepository {
 
       return response.data[0];
     } catch (error) {
+      applyIgdbBackoff(error);
       throw handleApiError(error);
     }
   }
