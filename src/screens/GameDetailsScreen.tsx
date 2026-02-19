@@ -118,13 +118,13 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
       : null;
   const developerStudios = Array.from(
     new Set(
-      (game.involved_companies ?? [])
+      (game?.involved_companies ?? [])
         .filter((entry) => entry.developer)
         .map((entry) => entry.company?.name)
         .filter((name): name is string => Boolean(name))
     )
   );
-  const screenshotUrls = (game.screenshots ?? [])
+  const screenshotUrls = (game?.screenshots ?? [])
     .map((shot) =>
       shot.image_id
         ? `https://images.igdb.com/igdb/image/upload/t_screenshot_big/${shot.image_id}.jpg`
