@@ -1,3 +1,3 @@
-import SearchScreen from '@/src/screens/SearchScreen';
+import ExploreTabScreen from '@/src/screens/SearchScreen';
 
-export default SearchScreen;
+export default ExploreTabScreen;

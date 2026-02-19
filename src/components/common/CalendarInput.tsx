@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   LayoutChangeEvent,
   Modal,
   StyleSheet,
@@ -15,6 +16,13 @@ interface CalendarInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  approximate?: boolean;
+  onChangeApproximate?: (value: boolean) => void;
+  mode?: 'single' | 'range';
+  rangeStart?: string;
+  rangeEnd?: string;
+  onChangeRange?: (start: string, end: string) => void;
+  onChangeApproximateRange?: (startApproximate: boolean, endApproximate: boolean) => void;
 }
 
 function parseDate(value: string): Date {
@@ -54,14 +62,28 @@ const MONTHS = [
   'Diciembre',
 ];
 
-function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fecha' }: CalendarInputProps) {
+function CalendarInput({
+  label,
+  value,
+  onChange,
+  placeholder = 'Seleccionar fecha',
+  approximate = false,
+  onChangeApproximate,
+  mode = 'single',
+  rangeStart = '',
+  rangeEnd = '',
+  onChangeRange,
+  onChangeApproximateRange,
+}: CalendarInputProps) {
   const isDark = useColorScheme() === 'dark';
   const [open, setOpen] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
-  const initial = parseDate(value);
+  const initial = parseDate(mode === 'range' ? rangeStart || rangeEnd || value : value);
   const [cursor, setCursor] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
 
   const selected = value ? parseDate(value) : null;
+  const selectedRangeStart = rangeStart ? parseDate(rangeStart) : null;
+  const selectedRangeEnd = rangeEnd ? parseDate(rangeEnd) : null;
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
 
@@ -85,6 +107,24 @@ function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fech
     setGridWidth(event.nativeEvent.layout.width);
   }
 
+  function sameDate(a: Date, b: Date): boolean {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function isBetween(date: Date, start: Date, end: Date): boolean {
+    const t = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const e = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+    return t >= Math.min(s, e) && t <= Math.max(s, e);
+  }
+
+  function prettyRange(start: string, end: string): string {
+    if (!start && !end) return '';
+    if (start && !end) return `${toHumanDate(start)} - ...`;
+    if (!start && end) return `... - ${toHumanDate(end)}`;
+    return `${toHumanDate(start)} - ${toHumanDate(end)}`;
+  }
+
   return (
     <View>
       <Text style={[styles.label, { color: isDark ? '#CBD5E1' : '#334155' }]}>{label}</Text>
@@ -99,7 +139,10 @@ function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fech
         onPress={() => setOpen(true)}
       >
         <MaterialIcons name="calendar-today" size={16} color={isDark ? '#94A3B8' : '#475569'} />
-        <Text style={[styles.inputText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{toHumanDate(value) || placeholder}</Text>
+        <Text style={[styles.inputText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+          {mode === 'range' ? prettyRange(rangeStart, rangeEnd) || placeholder : toHumanDate(value) || placeholder}
+        </Text>
+        {approximate || (mode === 'range' && (!rangeStart || !rangeEnd)) ? <Text style={styles.approxBadge}>Fecha no exacta</Text> : null}
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -129,25 +172,56 @@ function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fech
             <View style={styles.grid} onLayout={onGridLayout}>
               {days.map((date, idx) => {
                 if (!date) return <View key={`empty-${idx}`} style={[styles.dayCell, { width: cellSize, height: cellSize }]} />;
-                const selectedMatch =
-                  selected &&
-                  date.getFullYear() === selected.getFullYear() &&
-                  date.getMonth() === selected.getMonth() &&
-                  date.getDate() === selected.getDate();
+                const selectedMatch = mode === 'single'
+                  ? selected && sameDate(date, selected)
+                  : selectedRangeStart && sameDate(date, selectedRangeStart);
+                const selectedEndMatch = mode === 'range' && selectedRangeEnd ? sameDate(date, selectedRangeEnd) : false;
+                const selectedInRange =
+                  mode === 'range' && selectedRangeStart && selectedRangeEnd ? isBetween(date, selectedRangeStart, selectedRangeEnd) : false;
                 return (
                   <TouchableOpacity
                     key={toDateString(date)}
                     style={[
                       styles.dayCell,
                       { width: cellSize, height: cellSize },
+                      selectedInRange && styles.dayCellInRange,
                     ]}
                     onPress={() => {
-                      onChange(toDateString(date));
+                      const dateString = toDateString(date);
+                      if (mode === 'single') {
+                        onChangeApproximate?.(false);
+                        onChange(dateString);
+                        setOpen(false);
+                        return;
+                      }
+
+                      const start = rangeStart;
+                      const end = rangeEnd;
+                      if (!onChangeRange) return;
+                      onChangeApproximateRange?.(false, false);
+
+                      if (!start || (start && end)) {
+                        onChangeRange(dateString, '');
+                        return;
+                      }
+
+                      const startDate = parseDate(start);
+                      if (date.getTime() < startDate.getTime()) {
+                        onChangeRange(dateString, start);
+                      } else {
+                        onChangeRange(start, dateString);
+                      }
                       setOpen(false);
                     }}
                   >
-                    <View style={[styles.dayInner, selectedMatch && styles.dayInnerSelected]}>
-                      <Text style={[styles.dayText, { color: isDark ? '#E5E7EB' : '#0F172A' }, selectedMatch && styles.dayTextSelected]}>
+                    <View style={[styles.dayInner, (selectedMatch || selectedEndMatch) && styles.dayInnerSelected]}>
+                      <Text
+                        style={[
+                          styles.dayText,
+                          { color: isDark ? '#E5E7EB' : '#0F172A' },
+                          (selectedMatch || selectedEndMatch) && styles.dayTextSelected,
+                        ]}
+                      >
                         {date.getDate()}
                       </Text>
                     </View>
@@ -159,6 +233,23 @@ function CalendarInput({ label, value, onChange, placeholder = 'Seleccionar fech
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => onChange('')}>
                 <Text style={[styles.actionText, { color: isDark ? '#93C5FD' : '#0369A1' }]}>Limpiar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (mode === 'range') {
+                    onChangeRange?.('', '');
+                    onChangeApproximateRange?.(true, true);
+                  } else {
+                    onChange('');
+                    onChangeApproximate?.(true);
+                  }
+                  Alert.alert(
+                    'Fecha no exacta',
+                    'Al no poner una fecha exacta, este elemento no contará en métricas del perfil basadas en fechas.'
+                  );
+                }}
+              >
+                <Text style={[styles.actionText, { color: isDark ? '#FDE68A' : '#B45309' }]}>No recuerdo fecha exacta</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setOpen(false)}>
                 <Text style={[styles.actionText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Cerrar</Text>
@@ -189,13 +280,23 @@ const styles = StyleSheet.create({
   inputText: {
     fontSize: 14,
   },
+  approxBadge: {
+    marginLeft: 'auto',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 16,
   },
   card: {
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 14,
@@ -246,6 +347,10 @@ const styles = StyleSheet.create({
   dayInnerSelected: {
     backgroundColor: '#0E7490',
   },
+  dayCellInRange: {
+    backgroundColor: 'rgba(14,116,144,0.16)',
+    borderRadius: 8,
+  },
   dayText: {
     fontSize: 14,
     textAlign: 'center',
@@ -259,6 +364,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 10,
+    flexWrap: 'wrap',
   },
   actionText: {
     fontSize: 13,

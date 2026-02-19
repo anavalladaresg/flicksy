@@ -3,13 +3,15 @@ import { useClerk, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import UserAvatar from '../components/common/UserAvatar';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
 import { tvRepository } from '../features/tv/data/repositories';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 import {
+  getOwnProfile,
   getFriendsCount,
   getFriendsList,
   getIncomingFriendRequests,
@@ -18,9 +20,11 @@ import {
   searchProfilesByUsername,
   sendFriendRequestByUserId,
   syncOwnProfile,
+  updateOwnAvatar,
   type FriendProfile,
   type FriendRequestItem,
 } from '../services/social';
+import { getAvatarOptions, type AvatarOption } from '../services/avatars';
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
@@ -42,10 +46,42 @@ function mondayWeekKey(date: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function hasApproximateDateFlag(item: TrackedItem): boolean {
+  return Boolean(item.watchedAtApproximate || item.startedAtApproximate || item.finishedAtApproximate);
+}
+
+function metricDatesForItem(item: TrackedItem): string[] {
+  const exactDates = [
+    item.watchedAtApproximate ? undefined : item.watchedAt,
+    item.startedAtApproximate ? undefined : item.startedAt,
+    item.finishedAtApproximate ? undefined : item.finishedAt,
+  ].filter(Boolean) as string[];
+
+  if (exactDates.length > 0) return exactDates;
+  if (hasApproximateDateFlag(item)) return [];
+  return item.dateAdded ? [item.dateAdded] : [];
+}
+
+function metricDateForMovie(item: TrackedItem): string | null {
+  if (item.mediaType !== 'movie') return null;
+  if (item.watchedAt && !item.watchedAtApproximate) return item.watchedAt;
+  if (item.finishedAt && !item.finishedAtApproximate) return item.finishedAt;
+  if (hasApproximateDateFlag(item)) return null;
+  return item.dateAdded || null;
+}
+
+function metricDateForGame(item: TrackedItem): string | null {
+  if (item.mediaType !== 'game') return null;
+  if (item.finishedAt && !item.finishedAtApproximate) return item.finishedAt;
+  if (item.startedAt && !item.startedAtApproximate) return item.startedAt;
+  if (hasApproximateDateFlag(item)) return null;
+  return item.dateAdded || null;
+}
+
 function weeklyStreak(items: TrackedItem[]): number {
   const dates = new Set<string>();
   for (const item of items) {
-    const candidates = [item.dateAdded, item.watchedAt, item.startedAt, item.finishedAt].filter(Boolean) as string[];
+    const candidates = metricDatesForItem(item);
     candidates.forEach((iso) => {
       const dt = new Date(iso);
       if (!Number.isNaN(dt.getTime())) dates.add(mondayWeekKey(dt));
@@ -105,22 +141,35 @@ function ProfileScreen() {
   const goalPeriodStatuses = usePreferencesStore((state) => state.goalPeriodStatuses);
   const setGoalPeriodStatus = usePreferencesStore((state) => state.setGoalPeriodStatus);
   const setUsername = usePreferencesStore((state) => state.setUsername);
+  const storedProfileAvatarUrl = usePreferencesStore((state) => state.profileAvatarUrl);
+  const setStoredProfileAvatarUrl = usePreferencesStore((state) => state.setProfileAvatarUrl);
   const unlockedAchievementIds = usePreferencesStore((state) => state.unlockedAchievementIds);
   const trackedItems = useTrackingStore((state) => state.items);
   const darkEnabled = themeMode === 'dark';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const useWebBento = isWeb && windowWidth >= 920;
+  const isCompactProfile = windowWidth < 640;
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const emailAddress = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
   const computedUsername = (emailAddress.split('@')[0] || username || 'usuario').toLowerCase();
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || computedUsername;
   const [nameDraft, setNameDraft] = useState(computedUsername);
   const [nameSaving, setNameSaving] = useState(false);
+  const [isEditAvatarOpen, setIsEditAvatarOpen] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarOptions, setAvatarOptions] = useState<AvatarOption[]>([]);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(storedProfileAvatarUrl);
   const [friendsQuery, setFriendsQuery] = useState('');
   const [friendResults, setFriendResults] = useState<FriendProfile[]>([]);
   const [friendsPreview, setFriendsPreview] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
   const [friendMessage, setFriendMessage] = useState('');
+  const googleAccountImage =
+    ((user?.externalAccounts as any[])?.find((account: any) => account?.provider === 'oauth_google')?.imageUrl as string | undefined) ||
+    null;
+  const effectiveAvatarUrl = profileAvatarUrl || storedProfileAvatarUrl || googleAccountImage || null;
 
   const movieIds = useMemo(
     () => Array.from(new Set(trackedItems.filter((item) => item.mediaType === 'movie').map((item) => item.externalId))).slice(0, 20),
@@ -220,7 +269,7 @@ function ProfileScreen() {
     const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     const now = new Date();
     const events = trackedItems.flatMap((item) => {
-      const dates = [item.watchedAt, item.startedAt, item.finishedAt].filter(Boolean) as string[];
+      const dates = metricDatesForItem(item);
       return dates.map((date) => date.slice(0, 10));
     });
     const result = days.map((label, index) => {
@@ -236,7 +285,9 @@ function ProfileScreen() {
   }, [trackedItems]);
 
   const monthlyRatings = useMemo(() => {
-    const monthItems = trackedItems.filter((item) => isCurrentMonth(item.dateAdded) && typeof item.rating === 'number');
+    const monthItems = trackedItems.filter(
+      (item) => isCurrentMonth(item.dateAdded) && typeof item.rating === 'number' && !hasApproximateDateFlag(item)
+    );
     if (monthItems.length === 0) return 0;
     return monthItems.reduce((acc, item) => acc + (item.rating ?? 0), 0) / monthItems.length;
   }, [trackedItems]);
@@ -246,7 +297,9 @@ function ProfileScreen() {
     const key = periodKey(now, movieGoalPeriod);
     return trackedItems.filter((item) => {
       if (item.mediaType !== 'movie') return false;
-      const date = new Date(item.watchedAt || item.finishedAt || item.dateAdded);
+      const metricDate = metricDateForMovie(item);
+      if (!metricDate) return false;
+      const date = new Date(metricDate);
       if (Number.isNaN(date.getTime())) return false;
       return periodKey(date, movieGoalPeriod) === key;
     }).length;
@@ -257,7 +310,9 @@ function ProfileScreen() {
     const key = periodKey(now, gameGoalPeriod);
     return trackedItems.filter((item) => {
       if (item.mediaType !== 'game' || item.status !== 'completed') return false;
-      const date = new Date(item.finishedAt || item.dateAdded);
+      const metricDate = metricDateForGame(item);
+      if (!metricDate) return false;
+      const date = new Date(metricDate);
       if (Number.isNaN(date.getTime())) return false;
       return periodKey(date, gameGoalPeriod) === key;
     }).length;
@@ -278,12 +333,22 @@ function ProfileScreen() {
     let cancelled = false;
     const refreshFriendsData = async () => {
       setUsername(computedUsername);
-      await syncOwnProfile(computedUsername);
-      const [count, requests, friends] = await Promise.all([getFriendsCount(), getIncomingFriendRequests(), getFriendsList()]);
+      await syncOwnProfile(computedUsername, { displayName, fallbackAvatarUrl: googleAccountImage });
+      const [count, requests, friends, ownProfile] = await Promise.all([
+        getFriendsCount(),
+        getIncomingFriendRequests(),
+        getFriendsList(),
+        getOwnProfile(),
+      ]);
       if (!cancelled) {
         setFriendsCount(count);
         setIncomingRequests(requests);
         setFriendsPreview(friends.slice(0, 4));
+        const remoteAvatar = ownProfile?.avatar_url ?? null;
+        if (remoteAvatar) {
+          setProfileAvatarUrl(remoteAvatar);
+          setStoredProfileAvatarUrl(remoteAvatar);
+        }
       }
     };
     void refreshFriendsData();
@@ -292,7 +357,7 @@ function ProfileScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [computedUsername, setUsername]);
+  }, [computedUsername, displayName, googleAccountImage, setStoredProfileAvatarUrl, setUsername]);
 
   useEffect(() => {
     const now = new Date();
@@ -310,14 +375,18 @@ function ProfileScreen() {
         if (goalType === 'movie') {
           return trackedItems.filter((item) => {
             if (item.mediaType !== 'movie') return false;
-            const base = new Date(item.watchedAt || item.finishedAt || item.dateAdded);
+            const metricDate = metricDateForMovie(item);
+            if (!metricDate) return false;
+            const base = new Date(metricDate);
             if (Number.isNaN(base.getTime())) return false;
             return periodKey(base, period) === key;
           }).length;
         }
         return trackedItems.filter((item) => {
           if (item.mediaType !== 'game' || item.status !== 'completed') return false;
-          const base = new Date(item.finishedAt || item.dateAdded);
+          const metricDate = metricDateForGame(item);
+          if (!metricDate) return false;
+          const base = new Date(metricDate);
           if (Number.isNaN(base.getTime())) return false;
           return periodKey(base, period) === key;
         }).length;
@@ -370,7 +439,7 @@ function ProfileScreen() {
         return;
       }
       setUsername(next);
-      await syncOwnProfile(next);
+      await syncOwnProfile(next, { displayName: next, fallbackAvatarUrl: googleAccountImage });
       if (supabase) {
         const { error } = await supabase.auth.updateUser({ data: { display_name: next, username: next } });
         if (error) setFriendMessage('No se pudo guardar en auth, pero quedó en perfil.');
@@ -398,6 +467,38 @@ function ProfileScreen() {
     }
   }
 
+  async function openAvatarPicker() {
+    setIsEditAvatarOpen(true);
+    if (avatarOptions.length > 0) return;
+    setAvatarLoading(true);
+    try {
+      const options = await getAvatarOptions(100);
+      setAvatarOptions(options);
+    } finally {
+      setAvatarLoading(false);
+    }
+  }
+
+  async function handleSelectAvatar(nextAvatarUrl: string | null) {
+    const previous = profileAvatarUrl;
+    setProfileAvatarUrl(nextAvatarUrl);
+    setStoredProfileAvatarUrl(nextAvatarUrl);
+    const result = await updateOwnAvatar(nextAvatarUrl);
+    if (result.ok) {
+      setFriendMessage(result.message);
+      setIsEditAvatarOpen(false);
+      return;
+    }
+    if (result.message.includes('no soporta foto personalizada')) {
+      setFriendMessage('Foto guardada en este dispositivo. Para sincronizar entre dispositivos, añade avatar_url en Supabase.');
+      setIsEditAvatarOpen(false);
+      return;
+    }
+    setProfileAvatarUrl(previous);
+    setStoredProfileAvatarUrl(previous);
+    setFriendMessage(result.message);
+  }
+
   async function handleRespondRequest(requestId: string, decision: 'accepted' | 'declined') {
     const res = await respondFriendRequest(requestId, decision);
     setFriendMessage(res.message);
@@ -411,23 +512,37 @@ function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
-      <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}>
-        <View style={isWeb ? styles.bentoGrid : undefined}>
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoHero]}>
-          {isWeb ? (
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          isCompactProfile && styles.contentCompact,
+          isWeb && styles.contentWeb,
+          isWeb && !useWebBento && styles.contentWebMobile,
+        ]}
+      >
+        <View style={useWebBento ? styles.bentoGrid : styles.cardsStack}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoHero]}>
+          {useWebBento ? (
             <>
               <View style={[styles.heroGlowLarge, isDark && styles.heroGlowLargeDark]} />
               <View style={[styles.heroGlowSmall, isDark && styles.heroGlowSmallDark]} />
               <Text style={[styles.heroEyebrow, { color: isDark ? '#7DD3FC' : '#0E7490' }]}>PROFILE HUB</Text>
             </>
           ) : null}
-          <View style={styles.profileTopRow}>
-            <View style={styles.profileMainInfo}>
+          <View style={[styles.profileTopRow, isCompactProfile && styles.profileTopRowCompact]}>
+            <View style={[styles.profileAvatarColumn, isCompactProfile && styles.profileAvatarColumnCompact]}>
+              <UserAvatar avatarUrl={effectiveAvatarUrl} size={86} isDark={isDark} />
+              <TouchableOpacity style={[styles.avatarEditButton, isDark && styles.avatarEditButtonDark]} onPress={() => void openAvatarPicker()}>
+                <MaterialIcons name="photo-camera" size={14} color={isDark ? '#BAE6FD' : '#0369A1'} />
+                <Text style={[styles.avatarEditButtonText, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>Editar foto</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.profileMainInfo, isCompactProfile && styles.profileMainInfoCompact]}>
               <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
               <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
               <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
             </View>
-            <View style={styles.profileActionsColumn}>
+            <View style={[styles.profileActionsColumn, isCompactProfile && styles.profileActionsColumnCompact]}>
               <TouchableOpacity
                 style={[styles.themePill, isDark && styles.themePillDark]}
                 onPress={() => setThemeMode(darkEnabled ? 'light' : 'dark')}
@@ -462,7 +577,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoTwoThird]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoTwoThird]}>
           <View style={styles.friendsHeaderRow}>
             <View style={styles.friendsTitleRow}>
               <Text style={[styles.friendsBlockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Amigos</Text>
@@ -479,9 +594,12 @@ function ProfileScreen() {
               </Text>
               {incomingRequests.map((request) => (
                 <View key={request.id} style={[styles.requestRow, isDark && styles.requestRowDark]}>
-                  <Text style={[styles.requestName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                    {request.fromName || 'Usuario'}
-                  </Text>
+                  <View style={styles.requestMainInfo}>
+                    <UserAvatar avatarUrl={request.fromProfile?.avatar_url ?? null} size={28} isDark={isDark} />
+                    <Text style={[styles.requestName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+                      {request.fromName || 'Usuario'}
+                    </Text>
+                  </View>
                   <View style={styles.requestButtons}>
                     <TouchableOpacity style={styles.requestAccept} onPress={() => handleRespondRequest(request.id, 'accepted')}>
                       <Text style={styles.requestBtnText}>Aceptar</Text>
@@ -518,9 +636,12 @@ function ProfileScreen() {
           {!!friendMessage && <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>{friendMessage}</Text>}
           {friendResults.map((profile) => (
             <View key={profile.id} style={[styles.friendResultRow, isDark && styles.friendResultRowDark]}>
-              <Text style={[styles.friendResultName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                {profile.display_name || profile.username}
-              </Text>
+              <View style={styles.friendResultMainInfo}>
+                <UserAvatar avatarUrl={profile.avatar_url ?? null} size={30} isDark={isDark} />
+                <Text style={[styles.friendResultName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+                  {profile.display_name || profile.username}
+                </Text>
+              </View>
               <TouchableOpacity style={styles.friendAddBtn} onPress={() => handleAddFriend(profile)}>
                 <Text style={styles.friendAddText}>Añadir</Text>
               </TouchableOpacity>
@@ -533,7 +654,7 @@ function ProfileScreen() {
             ) : (
               friendsPreview.map((friend) => (
                 <View key={friend.id} style={[styles.friendPreviewRow, isDark && styles.friendPreviewRowDark]}>
-                  <View style={styles.friendAvatarDot} />
+                  <UserAvatar avatarUrl={friend.avatar_url ?? null} size={24} isDark={isDark} />
                   <Text style={[styles.friendPreviewName, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
                     {friend.display_name || friend.username}
                   </Text>
@@ -546,7 +667,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoTwoThird, isWeb && styles.bentoTall]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoTwoThird, useWebBento && styles.bentoTall]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Dashboard</Text>
           <View style={styles.statsRow}>
             <Text style={[styles.statLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Horas estimadas</Text>
@@ -581,7 +702,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Objetivos</Text>
           <View style={styles.goalItem}>
             <Text style={[styles.goalText, { color: isDark ? '#CBD5E1' : '#334155' }]}>
@@ -647,7 +768,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Media de puntuación</Text>
           <View style={styles.statsRow}>
             <Text style={[styles.statLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Películas</Text>
@@ -663,7 +784,7 @@ function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Géneros más consumidos</Text>
           {topGenres.length === 0 ? (
             <Text style={[styles.emptyText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
@@ -680,7 +801,7 @@ function ProfileScreen() {
           )}
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark, isWeb && styles.bentoCard, isWeb && styles.bentoOneThird]}>
+        <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoOneThird]}>
           <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Logros</Text>
           <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
             {`Conseguidos: ${unlockedAchievementIds.length}`}
@@ -736,6 +857,42 @@ function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={isEditAvatarOpen} transparent animationType="fade" onRequestClose={() => setIsEditAvatarOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.avatarModalCard, isDark && styles.cardDark]}>
+            <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Editar foto de perfil</Text>
+            <TouchableOpacity style={[styles.avatarResetBtn, isDark && styles.avatarResetBtnDark]} onPress={() => void handleSelectAvatar(null)}>
+              <Text style={styles.avatarResetText}>Usar foto por defecto</Text>
+            </TouchableOpacity>
+            {avatarLoading ? (
+              <View style={styles.avatarLoadingWrap}>
+                <ActivityIndicator size="small" color="#0E7490" />
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
+                {avatarOptions.map((avatar) => (
+                  <TouchableOpacity
+                    key={avatar.id}
+                    style={[
+                      styles.avatarOption,
+                      effectiveAvatarUrl === avatar.imageUrl && styles.avatarOptionActive,
+                      isDark && styles.avatarOptionDark,
+                    ]}
+                    onPress={() => void handleSelectAvatar(avatar.imageUrl)}
+                  >
+                    <UserAvatar avatarUrl={avatar.imageUrl} size={62} isDark={isDark} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setIsEditAvatarOpen(false)}>
+                <Text style={styles.modalCancelText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -750,16 +907,27 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 24,
   },
+  contentCompact: {
+    gap: 18,
+    paddingBottom: 34,
+  },
   contentWeb: {
     width: '100%',
     maxWidth: 1180,
     alignSelf: 'center',
+  },
+  contentWebMobile: {
+    gap: 16,
+    paddingBottom: 32,
   },
   bentoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
     alignItems: 'stretch',
+  },
+  cardsStack: {
+    gap: 18,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -851,15 +1019,57 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 14,
   },
+  profileTopRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  profileAvatarColumn: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileAvatarColumnCompact: {
+    alignSelf: 'center',
+  },
   profileMainInfo: {
     flex: 1,
     paddingRight: 8,
+  },
+  profileMainInfoCompact: {
+    paddingRight: 0,
+    alignItems: 'center',
+  },
+  avatarEditButton: {
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    backgroundColor: '#ECFEFF',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  avatarEditButtonDark: {
+    borderColor: '#1E3A8A',
+    backgroundColor: '#0F172A',
+  },
+  avatarEditButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
   profileActionsColumn: {
     minWidth: 170,
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
     gap: 8,
+  },
+  profileActionsColumnCompact: {
+    minWidth: 0,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   themePill: {
     width: 78,
@@ -1014,6 +1224,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  requestMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   requestButtons: {
     marginTop: 6,
     flexDirection: 'row',
@@ -1109,12 +1324,6 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     backgroundColor: '#0B1220',
   },
-  friendAvatarDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0E7490',
-  },
   friendPreviewName: {
     fontSize: 13,
     fontWeight: '700',
@@ -1137,6 +1346,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
     paddingRight: 8,
+  },
+  friendResultMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   friendAddBtn: {
     borderRadius: 999,
@@ -1345,6 +1560,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    alignItems: 'center',
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
@@ -1397,6 +1613,68 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
+  },
+  avatarModalCard: {
+    width: '100%',
+    maxWidth: 700,
+    maxHeight: '86%',
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  avatarLoadingWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarGrid: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  avatarOption: {
+    width: 84,
+    height: 84,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  avatarOptionDark: {
+    backgroundColor: '#0B1220',
+    borderColor: '#334155',
+  },
+  avatarOptionActive: {
+    borderColor: '#0E7490',
+    backgroundColor: '#ECFEFF',
+  },
+  avatarResetBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  avatarResetBtnDark: {
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+  },
+  avatarResetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
   },
   achievementToast: {
     position: 'absolute',

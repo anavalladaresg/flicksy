@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 type DynamicTopTabsProps = BottomTabBarProps & {
   isDark: boolean;
@@ -16,6 +16,8 @@ type Ripple = {
 };
 
 function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequests, activeColor }: DynamicTopTabsProps) {
+  const { width } = useWindowDimensions();
+  const compact = width < 560;
   const [itemLayouts, setItemLayouts] = useState<Record<string, { x: number; width: number }>>({});
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [ripples, setRipples] = useState<Record<string, Ripple[]>>({});
@@ -47,11 +49,12 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
   };
 
   return (
-    <View style={[styles.wrapper, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+    <View style={[styles.wrapper, compact && styles.wrapperCompact, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
       <View
         accessibilityRole="tablist"
         style={[
           styles.container,
+          compact && styles.containerCompact,
           {
             backgroundColor: colors.container,
             borderColor: colors.border,
@@ -99,7 +102,7 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
           return (
             <View
               key={route.key}
-              style={styles.itemSlot}
+              style={[styles.itemSlot, compact && styles.itemSlotCompact]}
               onLayout={(event) => {
                 const { x, width } = event.nativeEvent.layout;
                 setItemLayouts((prev) => {
@@ -137,7 +140,9 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
                   color: isFocused ? activeColor : colors.mutedText,
                   size: 20,
                 })}
-                <Text style={[styles.itemLabel, { color: isFocused ? activeColor : colors.text }]}>{label}</Text>
+                {!compact ? (
+                  <Text style={[styles.itemLabel, { color: isFocused ? activeColor : colors.text }]}>{label}</Text>
+                ) : null}
 
                 {route.name === 'profile' && pendingRequests > 0 ? (
                   <View style={[styles.badge, { backgroundColor: colors.badge }]} />
@@ -170,10 +175,14 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
 
 const styles = StyleSheet.create({
   wrapper: {
+    width: '100%',
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 6,
     alignItems: 'center',
+  },
+  wrapperCompact: {
+    paddingHorizontal: 8,
   },
   container: {
     position: 'relative',
@@ -183,10 +192,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minHeight: 52,
     alignSelf: 'center',
-    maxWidth: '100%',
+    width: 'auto',
+    maxWidth: 620,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+  },
+  containerCompact: {
+    width: '100%',
+    maxWidth: 520,
   },
   highlight: {
     position: 'absolute',
@@ -200,10 +214,16 @@ const styles = StyleSheet.create({
     transitionTimingFunction: 'cubic-bezier(0.25,1,0.5,1)' as any,
   },
   itemSlot: {
-    width: 112,
+    width: 124,
     zIndex: 1,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 4,
+  },
+  itemSlotCompact: {
+    flex: 1,
+    width: undefined,
+    minWidth: 0,
+    paddingHorizontal: 1,
   },
   itemButton: {
     height: 44,
@@ -219,6 +239,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  itemLabelCompact: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0,
   },
   badge: {
     position: 'absolute',

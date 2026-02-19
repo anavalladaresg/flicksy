@@ -1,6 +1,7 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useEffect, useRef } from 'react';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
+import { syncOwnProfile } from '../services/social';
 
 export function useAuthStatus() {
   const { isLoaded, isSignedIn, userId } = useAuth();
@@ -29,26 +30,13 @@ export function useAuthStatus() {
           user?.firstName ||
           user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] ||
           'usuario';
-        console.log('[auth-debug] profile-sync:start', {
-          userId,
-          preferredName,
-          isSignedIn,
+        const googleAccountImage =
+          (user?.externalAccounts as any[])?.find((account: any) => account?.provider === 'oauth_google')?.imageUrl ||
+          null;
+        await syncOwnProfile(preferredName, {
+          displayName: preferredName.trim(),
+          fallbackAvatarUrl: googleAccountImage,
         });
-        const { error } = await supabase.from('profiles').upsert(
-          {
-            id: userId,
-            username: preferredName.toLowerCase().trim(),
-            display_name: preferredName.trim(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        );
-        if (error) {
-          console.warn('[auth] profiles upsert failed:', error.message);
-          console.warn('[auth-debug] profile-sync:error-detail', error);
-        } else {
-          console.log('[auth-debug] profile-sync:ok', { userId });
-        }
         lastSyncedUserRef.current = userId;
       } catch (error) {
         console.warn('[auth] Clerk -> Supabase profile sync failed:', error);

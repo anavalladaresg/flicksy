@@ -7,6 +7,58 @@ export interface FriendProfile {
   id: string;
   username: string;
   display_name?: string | null;
+  avatar_url?: string | null;
+}
+
+const PROFILE_SELECT_WITH_AVATAR = 'id,username,display_name,avatar_url';
+const PROFILE_SELECT_BASE = 'id,username,display_name';
+let profilesAvatarColumnSupported: boolean | null = null;
+let avatarColumnProbePromise: Promise<boolean> | null = null;
+
+function isMissingAvatarColumnError(error: any): boolean {
+  const raw = String(error?.message || error?.details || '').toLowerCase();
+  return raw.includes('avatar_url') && (raw.includes('column') || raw.includes('schema cache'));
+}
+
+async function hasProfilesAvatarColumn(): Promise<boolean> {
+  if (!supabase) return false;
+  if (profilesAvatarColumnSupported === true) return true;
+  if (avatarColumnProbePromise) return avatarColumnProbePromise;
+
+  avatarColumnProbePromise = (async () => {
+    const probe = await supabase.from('profiles').select('avatar_url').limit(1);
+    if (probe.error && isMissingAvatarColumnError(probe.error)) {
+      profilesAvatarColumnSupported = false;
+    } else {
+      profilesAvatarColumnSupported = true;
+    }
+    return profilesAvatarColumnSupported;
+  })();
+
+  const supported = await avatarColumnProbePromise;
+  avatarColumnProbePromise = null;
+  return supported;
+}
+
+function normalizeProfileRow(row: any): FriendProfile {
+  return {
+    id: row.id,
+    username: row.username,
+    display_name: row.display_name,
+    avatar_url: row.avatar_url ?? null,
+  };
+}
+
+async function queryProfilesByIds(ids: string[]): Promise<FriendProfile[]> {
+  if (!supabase || ids.length === 0) return [];
+  if (await hasProfilesAvatarColumn()) {
+    const withAvatar = await supabase.from('profiles').select(PROFILE_SELECT_WITH_AVATAR).in('id', ids);
+    if (!withAvatar.error) return ((withAvatar.data ?? []) as any[]).map(normalizeProfileRow);
+    if (isMissingAvatarColumnError(withAvatar.error)) profilesAvatarColumnSupported = false;
+  }
+  const base = await supabase.from('profiles').select(PROFILE_SELECT_BASE).in('id', ids);
+  if (base.error) return [];
+  return ((base.data ?? []) as any[]).map(normalizeProfileRow);
 }
 
 export interface FriendRequestItem {
@@ -82,27 +134,104 @@ async function getAcceptedFriendIds(userId: string): Promise<string[]> {
   return [...ids];
 }
 
-export async function syncOwnProfile(username: string): Promise<void> {
+export async function syncOwnProfile(
+  username: string,
+  options?: { displayName?: string; fallbackAvatarUrl?: string | null }
+): Promise<void> {
   if (!supabase) return;
   const userId = await getCurrentUserId();
   if (!userId) return;
   const normalized = normalizeUsername(username);
   if (!normalized) return;
+
+  const supportsAvatar = await hasProfilesAvatarColumn();
+  let avatarToKeep: string | null = null;
+  if (supportsAvatar) {
+    const currentProfileRes = await supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', userId)
+      .maybeSingle();
+    if (currentProfileRes.error && isMissingAvatarColumnError(currentProfileRes.error)) {
+      profilesAvatarColumnSupported = false;
+    } else {
+      const currentAvatar = (currentProfileRes.data as any)?.avatar_url ?? null;
+      avatarToKeep = currentAvatar || options?.fallbackAvatarUrl || null;
+    }
+  }
+
   console.log('[social-debug] syncOwnProfile:start', { userId, username: normalized });
-  const { error } = await supabase.from('profiles').upsert(
-    {
-      id: userId,
-      username: normalized,
-      display_name: username.trim(),
-      updated_at: new Date().toISOString(),
-    },
+  const basePayload: any = {
+    id: userId,
+    username: normalized,
+    display_name: options?.displayName?.trim() || username.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  const withAvatarPayload = { ...basePayload, avatar_url: avatarToKeep };
+  const firstTry = await supabase.from('profiles').upsert(
+    profilesAvatarColumnSupported ? withAvatarPayload : basePayload,
     { onConflict: 'id' }
   );
-  if (error) {
-    console.warn('[social] syncOwnProfile failed:', error.message);
-  } else {
+  if (firstTry.error && isMissingAvatarColumnError(firstTry.error)) {
+    profilesAvatarColumnSupported = false;
+    const fallbackTry = await supabase.from('profiles').upsert(basePayload, { onConflict: 'id' });
+    if (fallbackTry.error) {
+      console.warn('[social] syncOwnProfile failed:', fallbackTry.error.message);
+      return;
+    }
     console.log('[social-debug] syncOwnProfile:ok', { userId });
+    return;
   }
+  if (firstTry.error) {
+    console.warn('[social] syncOwnProfile failed:', firstTry.error.message);
+    return;
+  }
+  console.log('[social-debug] syncOwnProfile:ok', { userId });
+}
+
+export async function getOwnProfile(): Promise<FriendProfile | null> {
+  if (!supabase) return null;
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+  if (await hasProfilesAvatarColumn()) {
+    const withAvatar = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT_WITH_AVATAR)
+      .eq('id', userId)
+      .maybeSingle();
+    if (!withAvatar.error && withAvatar.data) return normalizeProfileRow(withAvatar.data);
+    if (withAvatar.error && isMissingAvatarColumnError(withAvatar.error)) {
+      profilesAvatarColumnSupported = false;
+    }
+  }
+  const base = await supabase
+    .from('profiles')
+    .select(PROFILE_SELECT_BASE)
+    .eq('id', userId)
+    .maybeSingle();
+  if (base.error || !base.data) return null;
+  return normalizeProfileRow(base.data);
+}
+
+export async function updateOwnAvatar(avatarUrl: string | null): Promise<{ ok: boolean; message: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase no configurado.' };
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, message: 'Sesión no disponible.' };
+  if (!(await hasProfilesAvatarColumn())) {
+    return { ok: false, message: 'Tu base de datos aún no soporta foto personalizada.' };
+  }
+  const res = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() } as any)
+    .eq('id', userId);
+  if (res.error) {
+    if (isMissingAvatarColumnError(res.error)) {
+      profilesAvatarColumnSupported = false;
+      return { ok: false, message: 'Tu base de datos aún no soporta foto personalizada.' };
+    }
+    return { ok: false, message: 'No se pudo guardar la foto de perfil.' };
+  }
+  return { ok: true, message: 'Foto de perfil actualizada.' };
 }
 
 export async function saveOwnPushToken(pushToken: string): Promise<void> {
@@ -142,23 +271,39 @@ export async function searchProfilesByUsername(query: string): Promise<FriendPro
   if (!userId) return [];
   const normalized = normalizeUsername(query);
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,username,display_name')
-    .ilike('username', `%${normalized}%`)
-    .limit(15);
-
-  if (error) {
-    console.warn('[social] searchProfilesByUsername failed:', error.message);
-    return [];
+  let data: any[] = [];
+  if (await hasProfilesAvatarColumn()) {
+    const withAvatar = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT_WITH_AVATAR)
+      .ilike('username', `%${normalized}%`)
+      .limit(15);
+    if (!withAvatar.error) {
+      data = withAvatar.data ?? [];
+    } else if (isMissingAvatarColumnError(withAvatar.error)) {
+      profilesAvatarColumnSupported = false;
+    }
+  }
+  if (data.length === 0) {
+    const base = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT_BASE)
+      .ilike('username', `%${normalized}%`)
+      .limit(15);
+    if (base.error) {
+      console.warn('[social] searchProfilesByUsername failed:', base.error.message);
+      return [];
+    }
+    data = base.data ?? [];
   }
 
   // unique by username just in case table constraint is missing
   const dedup = new Map<string, FriendProfile>();
-  ((data ?? []) as FriendProfile[])
+  (data as any[])
     .filter((profile) => profile.id !== userId)
     .forEach((profile) => {
-      if (!dedup.has(profile.username)) dedup.set(profile.username, profile);
+      const normalizedRow = normalizeProfileRow(profile);
+      if (!dedup.has(normalizedRow.username)) dedup.set(normalizedRow.username, normalizedRow);
     });
   return [...dedup.values()];
 }
@@ -245,8 +390,8 @@ export async function getIncomingFriendRequests(): Promise<FriendRequestItem[]> 
   const requests = (data ?? []) as FriendRequestItem[];
   const fromIds = requests.map((r) => r.from_user_id);
   if (fromIds.length === 0) return [];
-  const profilesRes = await supabase.from('profiles').select('id,username,display_name').in('id', fromIds);
-  const map = new Map((profilesRes.data ?? []).map((p: any) => [p.id, p as FriendProfile]));
+  const profiles = await queryProfilesByIds(fromIds);
+  const map = new Map(profiles.map((p) => [p.id, p as FriendProfile]));
   return requests.map((request) => {
     const fromProfile = map.get(request.from_user_id);
     const fallbackFromRequest =
@@ -329,9 +474,7 @@ export async function getFriendsList(): Promise<FriendProfile[]> {
   if (!userId) return [];
   const friendIds = await getAcceptedFriendIds(userId);
   if (friendIds.length === 0) return [];
-  const profilesRes = await supabase.from('profiles').select('id,username,display_name').in('id', friendIds);
-  if (profilesRes.error) return [];
-  return (profilesRes.data ?? []) as FriendProfile[];
+  return queryProfilesByIds(friendIds);
 }
 
 export async function getFriendLibrary(friendId: string): Promise<TrackedItem[]> {
@@ -409,7 +552,7 @@ export async function getFriendsRatingsForItem(
       .eq('media_type', mediaType)
       .eq('external_id', externalId)
       .not('rating', 'is', null),
-    supabase.from('profiles').select('id,username,display_name').in('id', friendIds),
+    queryProfilesByIds(friendIds),
   ]);
 
   if (itemsRes.error) {
@@ -418,7 +561,7 @@ export async function getFriendsRatingsForItem(
   }
 
   const nameById = new Map(
-    ((profilesRes.data ?? []) as FriendProfile[]).map((profile) => [
+    (profilesRes as FriendProfile[]).map((profile) => [
       profile.id,
       profile.display_name || profile.username || 'Amigo/a',
     ])
@@ -446,11 +589,7 @@ export async function getFriendsActivity(limit = 12): Promise<FriendActivityItem
   const friendIds = await getAcceptedFriendIds(userId);
   if (friendIds.length === 0) return [];
 
-  const profilesRes = await supabase
-    .from('profiles')
-    .select('id,username,display_name')
-    .in('id', friendIds);
-  const profiles = (profilesRes.data ?? []) as FriendProfile[];
+  const profiles = await queryProfilesByIds(friendIds);
   const nameById = new Map(
     profiles.map((profile) => [profile.id, profile.display_name || profile.username || 'Amiga/o'])
   );

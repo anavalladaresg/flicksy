@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
     ActivityIndicator,
     Image,
+    Linking,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -43,6 +44,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const [rating, setRating] = useState(0);
   const [status, setStatus] = useState<'planned' | 'completed'>('planned');
   const [watchedAt, setWatchedAt] = useState('');
+  const [watchedAtApproximate, setWatchedAtApproximate] = useState(false);
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
@@ -106,14 +108,27 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     const year = date.getFullYear();
     return `${day}/${month}/${year}`;
   }
+  const trailerVideo = movie?.videos?.results?.find(
+    (video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser')
+  );
+  const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
+
+  async function openTrailer() {
+    if (!trailerUrl) return;
+    const supported = await Linking.canOpenURL(trailerUrl);
+    if (supported) await Linking.openURL(trailerUrl);
+  }
 
   const handleConfirmAdd = () => {
     if (!movie) return;
+    const canSaveScore = status !== 'planned';
+    const canSaveDate = status === 'completed';
     if (trackedMovieItem) {
       updateTrackedItem(trackedMovieItem.id, {
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        watchedAt: watchedAt.trim() || undefined,
+        watchedAt: canSaveDate ? watchedAt.trim() || undefined : undefined,
+        watchedAtApproximate: canSaveDate ? watchedAtApproximate : false,
         startedAt: undefined,
         finishedAt: undefined,
         releaseYear: movie.release_date ? new Date(movie.release_date).getFullYear() : undefined,
@@ -130,9 +145,10 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         mediaType: 'movie',
         title: movie.title,
         posterPath: movie.poster_path || undefined,
-        rating,
+        rating: canSaveScore ? rating : undefined,
         status,
-        watchedAt: watchedAt.trim() || undefined,
+        watchedAt: canSaveDate ? watchedAt.trim() || undefined : undefined,
+        watchedAtApproximate: canSaveDate ? watchedAtApproximate : false,
         startedAt: undefined,
         finishedAt: undefined,
         releaseYear: movie.release_date ? new Date(movie.release_date).getFullYear() : undefined,
@@ -151,6 +167,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
       (trackedMovieItem.status as 'planned' | 'completed') || 'planned'
     );
     setWatchedAt(trackedMovieItem.watchedAt ?? '');
+    setWatchedAtApproximate(Boolean(trackedMovieItem.watchedAtApproximate));
     setIsRatingOpen(true);
   }
 
@@ -218,6 +235,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
                   setRating(0);
                   setStatus('planned');
                   setWatchedAt('');
+                  setWatchedAtApproximate(false);
                   setIsRatingOpen(true);
                 }
               }}
@@ -293,6 +311,13 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
             </View>
           </View>
 
+          {trailerUrl ? (
+            <TouchableOpacity style={[styles.trailerButton, isDark && styles.trailerButtonDark]} onPress={() => void openTrailer()}>
+              <MaterialIcons name="play-circle-filled" size={18} color="#FFFFFF" />
+              <Text style={styles.trailerButtonText}>Ver tráiler</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {movie.genres && movie.genres.length > 0 && (
             <View style={styles.genres}>
               {movie.genres.map((genre) => (
@@ -321,11 +346,13 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         ]}
         dateMode="single"
         watchedAt={watchedAt}
+        watchedAtApproximate={watchedAtApproximate}
         startedAt=""
         finishedAt=""
         onChange={setRating}
         onChangeStatus={(next) => setStatus(next as 'planned' | 'completed')}
         onChangeWatchedAt={setWatchedAt}
+        onChangeWatchedAtApproximate={setWatchedAtApproximate}
         onChangeStartedAt={() => undefined}
         onChangeFinishedAt={() => undefined}
         onCancel={() => setIsRatingOpen(false)}
@@ -552,6 +579,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#334155',
     fontWeight: '700',
+  },
+  trailerButton: {
+    marginTop: -2,
+    marginBottom: 14,
+    borderRadius: 12,
+    backgroundColor: '#0E7490',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trailerButtonDark: {
+    backgroundColor: '#1E40AF',
+  },
+  trailerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   genres: {
     flexDirection: 'row',

@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
@@ -76,6 +77,12 @@ function statusOptionsForType(type: MediaType) {
       { value: 'completed', label: 'Jugado' },
     ] as const;
   }
+  if (type === 'movie') {
+    return [
+      { value: 'planned', label: 'Pendiente' },
+      { value: 'completed', label: 'Visto' },
+    ] as const;
+  }
   return [
     { value: 'planned', label: 'Pendiente' },
     { value: 'watching', label: 'Viendo' },
@@ -97,9 +104,11 @@ function statusLabel(status: TrackedItem['status']) {
 function RatingEditor({
   value,
   onChange,
+  provisional = false,
 }: {
   value: number;
   onChange: (next: number) => void;
+  provisional?: boolean;
 }) {
   const [starsWidth, setStarsWidth] = useState(0);
   const starsTrackRef = useRef<View | null>(null);
@@ -144,7 +153,9 @@ function RatingEditor({
 
   return (
     <View style={styles.modalBlock}>
-      <Text style={styles.modalLabel}>Puntuación personal ({value.toFixed(1)} / 10)</Text>
+      <Text style={styles.modalLabel}>
+        {provisional ? 'Puntuación provisional' : 'Puntuación personal'} ({value.toFixed(1)} / 10)
+      </Text>
       <View style={styles.modalStarsRow}>
         <View
           ref={starsTrackRef}
@@ -169,6 +180,8 @@ function RatingEditor({
 function TrackedScreen() {
   const isDark = useColorScheme() === 'dark';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebMobile = isWeb && windowWidth < 920;
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
@@ -178,11 +191,13 @@ function TrackedScreen() {
 
   const [editingItem, setEditingItem] = useState<TrackedItem | null>(null);
   const [editingStatus, setEditingStatus] = useState<TrackedItem['status']>('planned');
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [editingRating, setEditingRating] = useState(0);
   const [editingWatchedAt, setEditingWatchedAt] = useState('');
   const [editingStartedAt, setEditingStartedAt] = useState('');
   const [editingFinishedAt, setEditingFinishedAt] = useState('');
+  const [editingWatchedAtApproximate, setEditingWatchedAtApproximate] = useState(false);
+  const [editingStartedAtApproximate, setEditingStartedAtApproximate] = useState(false);
+  const [editingFinishedAtApproximate, setEditingFinishedAtApproximate] = useState(false);
 
   const items = useTrackingStore((state) => state.items);
   const removeItem = useTrackingStore((state) => state.removeItem);
@@ -254,35 +269,58 @@ function TrackedScreen() {
     setEditingWatchedAt(item.watchedAt ?? '');
     setEditingStartedAt(item.startedAt ?? '');
     setEditingFinishedAt(item.finishedAt ?? '');
-    setIsStatusOpen(false);
+    setEditingWatchedAtApproximate(Boolean(item.watchedAtApproximate));
+    setEditingStartedAtApproximate(Boolean(item.startedAtApproximate));
+    setEditingFinishedAtApproximate(Boolean(item.finishedAtApproximate));
   }
 
   function saveEditor() {
     if (!editingItem) return;
     const hasInvalidRange =
       editingItem.mediaType !== 'movie' &&
+      editingStatus === 'completed' &&
       Boolean(editingStartedAt && editingFinishedAt) &&
       new Date(editingFinishedAt).getTime() < new Date(editingStartedAt).getTime();
     if (hasInvalidRange) return;
+    const isPlanned = editingStatus === 'planned';
+    const isInProgress = editingStatus === 'watching' || editingStatus === 'playing';
+    const canEditMovieDate = editingItem.mediaType === 'movie' && editingStatus === 'completed';
+    const canEditStartDate = editingItem.mediaType !== 'movie' && (isInProgress || editingStatus === 'completed');
+    const canEditEndDate = editingItem.mediaType !== 'movie' && editingStatus === 'completed';
     updateItem(editingItem.id, {
       status: editingStatus,
-      rating: editingRating > 0 ? editingRating : undefined,
-      watchedAt: editingItem.mediaType === 'movie' ? editingWatchedAt.trim() || undefined : undefined,
-      startedAt: editingItem.mediaType !== 'movie' ? editingStartedAt.trim() || undefined : undefined,
-      finishedAt: editingItem.mediaType !== 'movie' ? editingFinishedAt.trim() || undefined : undefined,
+      rating: !isPlanned && editingRating > 0 ? editingRating : undefined,
+      watchedAt: canEditMovieDate ? editingWatchedAt.trim() || undefined : undefined,
+      startedAt: canEditStartDate ? editingStartedAt.trim() || undefined : undefined,
+      finishedAt: canEditEndDate ? editingFinishedAt.trim() || undefined : undefined,
+      watchedAtApproximate: canEditMovieDate ? editingWatchedAtApproximate : false,
+      startedAtApproximate: canEditStartDate ? editingStartedAtApproximate : false,
+      finishedAtApproximate: canEditEndDate ? editingFinishedAtApproximate : false,
     });
     setEditingItem(null);
   }
 
   const hasInvalidRangeInEditor =
     editingItem?.mediaType !== 'movie' &&
+    editingStatus === 'completed' &&
     Boolean(editingStartedAt && editingFinishedAt) &&
     new Date(editingFinishedAt).getTime() < new Date(editingStartedAt).getTime();
 
+  const isEditingPlanned = editingStatus === 'planned';
+  const isEditingInProgress = editingStatus === 'watching' || editingStatus === 'playing';
+
   function renderDateSummary(item: TrackedItem) {
     if (item.mediaType === 'movie') {
+      if (item.watchedAtApproximate) return 'Visto: fecha no exacta';
       const watched = item.watchedAt ? formatDate(item.watchedAt) : 'sin fecha';
       return `Visto: ${watched}`;
+    }
+    if (
+      (item.startedAtApproximate && !item.startedAt) ||
+      (item.finishedAtApproximate && !item.finishedAt) ||
+      (item.startedAtApproximate && item.finishedAtApproximate)
+    ) {
+      return 'Fechas: no exactas';
     }
     const start = item.startedAt ? formatDate(item.startedAt) : 'sin inicio';
     const end = item.finishedAt ? formatDate(item.finishedAt) : 'sin fin';
@@ -333,7 +371,7 @@ function TrackedScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[styles.filterChip, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
                 <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : '#334155'} />
-                <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Videojuegos</Text>
+                <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
                 <View style={styles.chipCounter}>
                   <Text style={styles.chipCounterText}>{counters.game}</Text>
                 </View>
@@ -426,7 +464,7 @@ function TrackedScreen() {
                 </TouchableOpacity>
               );
 
-              if (isWeb) {
+              if (isWeb && !isWebMobile) {
                 return (
                   <View key={item.id}>
                     {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
@@ -480,49 +518,93 @@ function TrackedScreen() {
                 {editingItem && (
                   <View style={styles.modalBlock}>
                     <Text style={styles.modalLabel}>Estado</Text>
-                    <TouchableOpacity style={styles.statusDropdownButton} onPress={() => setIsStatusOpen((prev) => !prev)}>
-                      <Text style={styles.statusDropdownText}>{statusLabel(editingStatus)}</Text>
-                      <MaterialIcons name={isStatusOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={20} color="#334155" />
-                    </TouchableOpacity>
-                    {isStatusOpen && (
-                      <View style={styles.statusDropdownMenu}>
-                        {statusOptionsForType(editingItem.mediaType).map((option) => (
+                    <View style={styles.statusButtonsRow}>
+                      {statusOptionsForType(editingItem.mediaType).map((option) => {
+                        const color = STATUS_COLORS[option.value] || '#64748B';
+                        const active = editingStatus === option.value;
+                        return (
                           <TouchableOpacity
                             key={option.value}
                             style={[
-                              styles.statusDropdownItem,
-                              {
-                                backgroundColor: `${(STATUS_COLORS[option.value] || '#64748B')}22`,
-                              },
+                              styles.statusButton,
+                              { borderColor: color, backgroundColor: `${color}22` },
+                              active && { backgroundColor: `${color}66` },
                             ]}
-                            onPress={() => {
-                              setEditingStatus(option.value);
-                              setIsStatusOpen(false);
-                            }}
+                            onPress={() => setEditingStatus(option.value)}
                           >
-                            <View style={[styles.statusColorDot, { backgroundColor: STATUS_COLORS[option.value] || '#64748B' }]} />
-                            <Text style={styles.statusDropdownItemText}>{option.label}</Text>
+                            <Text style={[styles.statusButtonText, { color }]}>{option.label}</Text>
                           </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
+                        );
+                      })}
+                    </View>
                   </View>
                 )}
 
-                <RatingEditor value={editingRating} onChange={setEditingRating} />
+                {isEditingPlanned ? (
+                  <View style={styles.modalBlock}>
+                    <Text style={styles.modalLabel}>Puntuación personal</Text>
+                    <Text style={[styles.modalHint, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                      En estado Pendiente no puedes añadir puntuación.
+                    </Text>
+                  </View>
+                ) : (
+                  <View>
+                    <RatingEditor value={editingRating} onChange={setEditingRating} provisional={isEditingInProgress} />
+                  </View>
+                )}
 
                 <View style={styles.modalBlock}>
-                  {editingItem?.mediaType === 'movie' ? (
-                    <CalendarInput label="Fecha visualización" value={editingWatchedAt} onChange={setEditingWatchedAt} placeholder="Seleccionar" />
-                  ) : (
+                  {editingItem?.mediaType === 'movie' && editingStatus === 'completed' ? (
+                    <CalendarInput
+                      label="Fecha visualización"
+                      value={editingWatchedAt}
+                      onChange={setEditingWatchedAt}
+                      placeholder="Seleccionar"
+                      approximate={editingWatchedAtApproximate}
+                      onChangeApproximate={setEditingWatchedAtApproximate}
+                    />
+                  ) : editingItem?.mediaType === 'movie' ? (
+                    <Text style={[styles.modalHint, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                      Cambia el estado a Completado para añadir fecha.
+                    </Text>
+                  ) : editingStatus === 'completed' ? (
                     <View style={styles.modalDatesRow}>
                       <View style={styles.modalDateCol}>
-                        <CalendarInput label="Fecha inicio" value={editingStartedAt} onChange={setEditingStartedAt} placeholder="Seleccionar" />
+                        <CalendarInput
+                          label="Fecha inicio"
+                          value={editingStartedAt}
+                          onChange={setEditingStartedAt}
+                          placeholder="Seleccionar"
+                          approximate={editingStartedAtApproximate}
+                          onChangeApproximate={setEditingStartedAtApproximate}
+                        />
                       </View>
                       <View style={styles.modalDateCol}>
-                        <CalendarInput label="Fecha fin" value={editingFinishedAt} onChange={setEditingFinishedAt} placeholder="Seleccionar" />
+                        <CalendarInput
+                          label="Fecha fin"
+                          value={editingFinishedAt}
+                          onChange={setEditingFinishedAt}
+                          placeholder="Seleccionar"
+                          approximate={editingFinishedAtApproximate}
+                          onChangeApproximate={setEditingFinishedAtApproximate}
+                        />
                       </View>
                     </View>
+                  ) : isEditingInProgress ? (
+                    <View style={styles.modalDateCol}>
+                      <CalendarInput
+                        label="Fecha inicio"
+                        value={editingStartedAt}
+                        onChange={setEditingStartedAt}
+                        placeholder="Seleccionar"
+                        approximate={editingStartedAtApproximate}
+                        onChangeApproximate={setEditingStartedAtApproximate}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={[styles.modalHint, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                      Cambia el estado a Viendo/Jugando o Completado para añadir fechas.
+                    </Text>
                   )}
                 </View>
                 {hasInvalidRangeInEditor && (
@@ -830,12 +912,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    alignItems: 'center',
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
     maxHeight: '82%',
+    width: '100%',
+    maxWidth: 560,
   },
   modalCardDark: {
     backgroundColor: '#111827',
@@ -860,50 +945,19 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '600',
   },
-  statusDropdownButton: {
+  statusButtonsRow: {
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-  },
-  statusDropdownText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  statusDropdownMenu: {
-    position: 'absolute',
-    top: 66,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-  },
-  statusDropdownItem: {
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  statusColorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  statusButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  statusDropdownItemText: {
+  statusButtonText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
@@ -948,6 +1002,11 @@ const styles = StyleSheet.create({
   modalDateCol: {
     flex: 1,
   },
+  modalHint: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   modalActions: {
     marginTop: 16,
     flexDirection: 'row',
@@ -987,5 +1046,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export { TrackedScreen };
 export default TrackedScreen;

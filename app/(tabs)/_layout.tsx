@@ -108,24 +108,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color }) => (
-            <View style={{ position: 'relative' }}>
-              <IconSymbol size={28} name="person.fill" color={color} />
-              {pendingRequests > 0 ? (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 1,
-                    right: -1,
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: '#EF4444',
-                  }}
-                />
-              ) : null}
-            </View>
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>

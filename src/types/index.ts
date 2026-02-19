@@ -15,6 +15,9 @@ export interface Movie {
   runtime?: number;
   genres?: Genre[];
   production_companies?: ProductionCompany[];
+  videos?: {
+    results?: VideoItem[];
+  };
 }
 
 export interface MovieResponse {
@@ -36,6 +39,9 @@ export interface TVShow {
   number_of_seasons?: number;
   number_of_episodes?: number;
   genres?: Genre[];
+  videos?: {
+    results?: VideoItem[];
+  };
 }
 
 export interface TVShowResponse {
@@ -57,6 +63,17 @@ export interface Game {
   genres?: GameGenre[];
   platforms?: Platform[];
   storyline?: string;
+  screenshots?: Screenshot[];
+  involved_companies?: InvolvedCompany[];
+}
+
+export interface VideoItem {
+  id: string;
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official?: boolean;
 }
 
 export interface Cover {
@@ -83,6 +100,22 @@ export interface Platform {
   id: number;
   name: string;
   abbreviation?: string;
+}
+
+export interface Screenshot {
+  id: number;
+  image_id?: string;
+  url?: string;
+}
+
+export interface InvolvedCompany {
+  id: number;
+  developer?: boolean;
+  publisher?: boolean;
+  company?: {
+    id: number;
+    name: string;
+  };
 }
 
 // ============= COMUNES =============
@@ -112,6 +145,9 @@ export interface TrackedItem {
   watchedAt?: string; // Para películas
   startedAt?: string; // Para series/juegos
   finishedAt?: string; // Para series/juegos
+  watchedAtApproximate?: boolean; // Fecha no exacta declarada por el usuario
+  startedAtApproximate?: boolean; // Fecha no exacta declarada por el usuario
+  finishedAtApproximate?: boolean; // Fecha no exacta declarada por el usuario
   releaseYear?: number;
   genres?: string[];
   platforms?: string[];
