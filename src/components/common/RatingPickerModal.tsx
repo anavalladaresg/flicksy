@@ -167,11 +167,12 @@ function RatingPickerModal({
                       styles.statusChip,
                       isDark && styles.statusChipDark,
                       { borderColor: option.color, backgroundColor: `${option.color}22` },
-                      active && { backgroundColor: `${option.color}66` },
+                      active && { backgroundColor: `${option.color}CC`, borderColor: option.color },
+                      active && styles.statusChipActive,
                     ]}
                     onPress={() => onChangeStatus(option.value)}
                   >
-                    <Text style={[styles.statusChipText, active && styles.statusChipTextActive, { color: option.color }]}>
+                    <Text style={[styles.statusChipText, active && styles.statusChipTextActive, { color: active ? '#FFFFFF' : option.color }]}>
                       {option.label}
                     </Text>
                   </TouchableOpacity>
@@ -343,6 +344,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: '#FFFFFF',
   },
+  statusChipActive: {
+    borderWidth: 2,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 6px 14px rgba(15, 23, 42, 0.22)',
+    }),
+  },
   statusChipDark: {
     backgroundColor: '#0F172A',
   },
@@ -352,7 +359,8 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   statusChipTextActive: {
-    color: '#1E293B',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   starsRow: {
     marginTop: 12,

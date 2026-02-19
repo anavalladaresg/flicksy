@@ -1,5 +1,5 @@
-import React from 'react';
-import { Toaster } from 'sileo';
+import React, { useEffect } from 'react';
+import { SILEO_POSITIONS, Toaster, sileo, type SileoPosition } from 'sileo';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Fonts } from '@/constants/theme';
 
@@ -7,6 +7,27 @@ export default function AppToaster() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const fontFamily = Fonts.web?.sans || "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+  useEffect(() => {
+    const onToastClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-sileo-button]')) return;
+      const toast = target.closest('[data-sileo-toast]') as HTMLElement | null;
+      if (!toast) return;
+
+      const viewport = toast.closest('[data-sileo-viewport]') as HTMLElement | null;
+      const positionAttr = viewport?.getAttribute('data-position') || undefined;
+      if (positionAttr && SILEO_POSITIONS.includes(positionAttr as SileoPosition)) {
+        sileo.clear(positionAttr as SileoPosition);
+      } else {
+        sileo.clear();
+      }
+    };
+
+    document.addEventListener('click', onToastClick, true);
+    return () => document.removeEventListener('click', onToastClick, true);
+  }, []);
 
   return (
     <Toaster

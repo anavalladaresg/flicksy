@@ -344,65 +344,67 @@ function TrackedScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Biblioteca</Text>
-          <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>{counters.all} guardados</Text>
-        </View>
+        <View style={[styles.topSection, isWeb && styles.topSectionWeb]}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Biblioteca</Text>
+            <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>{counters.all} guardados</Text>
+          </View>
 
-        <View style={styles.controls}>
-          <View style={styles.filterBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-              <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-                <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : '#334155'} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.filterChip, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
-                <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : '#334155'} />
-                <Text style={[styles.filterText, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
-                <View style={styles.chipCounter}>
-                  <Text style={styles.chipCounterText}>{counters.movie}</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.filterChip, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
-                <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : '#334155'} />
-                <Text style={[styles.filterText, filter === 'tv' && styles.filterTextActive]}>Series</Text>
-                <View style={styles.chipCounter}>
-                  <Text style={styles.chipCounterText}>{counters.tv}</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.filterChip, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
-                <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : '#334155'} />
-                <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
-                <View style={styles.chipCounter}>
-                  <Text style={styles.chipCounterText}>{counters.game}</Text>
-                </View>
-              </TouchableOpacity>
-            </ScrollView>
+          <View style={styles.controls}>
+            <View style={styles.filterBar}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+                <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+                  <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : '#334155'} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.filterChip, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
+                  <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : '#334155'} />
+                  <Text style={[styles.filterText, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
+                  <View style={styles.chipCounter}>
+                    <Text style={styles.chipCounterText}>{counters.movie}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.filterChip, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
+                  <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : '#334155'} />
+                  <Text style={[styles.filterText, filter === 'tv' && styles.filterTextActive]}>Series</Text>
+                  <View style={styles.chipCounter}>
+                    <Text style={styles.chipCounterText}>{counters.tv}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.filterChip, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
+                  <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : '#334155'} />
+                  <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
+                  <View style={styles.chipCounter}>
+                    <Text style={styles.chipCounterText}>{counters.game}</Text>
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
 
-            <View style={styles.sortAnchor} ref={sortButtonRef}>
-              <TouchableOpacity style={styles.sortButton} onPress={toggleSortMenu}>
-                <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color="#0F172A" />
-              </TouchableOpacity>
+              <View style={styles.sortAnchor} ref={sortButtonRef}>
+                <TouchableOpacity style={styles.sortButton} onPress={toggleSortMenu}>
+                  <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color="#0F172A" />
+                </TouchableOpacity>
 
-              {isSortOpen && !isWeb && (
-                <View style={styles.sortMenu}>
-                  {SORT_OPTIONS.map((option) => {
-                    const active = sortBy === option.value;
-                    return (
-                      <TouchableOpacity
-                        key={option.value}
-                        style={[styles.sortMenuItem, active && styles.sortMenuItemActive]}
-                        onPress={() => {
-                          setSortBy(option.value);
-                          setIsSortOpen(false);
-                        }}
-                      >
-                        <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
-                        <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+                {isSortOpen && !isWeb && (
+                  <View style={styles.sortMenu}>
+                    {SORT_OPTIONS.map((option) => {
+                      const active = sortBy === option.value;
+                      return (
+                        <TouchableOpacity
+                          key={option.value}
+                          style={[styles.sortMenuItem, active && styles.sortMenuItemActive]}
+                          onPress={() => {
+                            setSortBy(option.value);
+                            setIsSortOpen(false);
+                          }}
+                        >
+                          <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
+                          <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -438,7 +440,7 @@ function TrackedScreen() {
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>Añade contenido desde Home o Search para verlo aquí.</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.list}>
+          <ScrollView contentContainerStyle={[styles.list, isWeb && styles.listWeb]}>
             {filtered.map((item, index) => {
               const previous = filtered[index - 1];
               const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
@@ -447,6 +449,9 @@ function TrackedScreen() {
                   <Image source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
 
                   <View style={styles.content}>
+                    <Text style={[styles.ratingCorner, isDark ? styles.ratingCornerDark : styles.ratingCornerLight]}>
+                      {item.rating ? `★ ${item.rating.toFixed(1)}` : '★ -'}
+                    </Text>
                     <View style={styles.titleRow}>
                       <MaterialIcons name={getMediaIcon(item.mediaType)} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
                       <Text numberOfLines={1} style={[styles.cardTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{item.title}</Text>
@@ -456,10 +461,32 @@ function TrackedScreen() {
                       <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: '#FFFFFF' }]}>
                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{statusLabel(item.status)}</Text>
                       </View>
-                      <Text style={[styles.ratingText, { color: isDark ? '#CBD5E1' : '#334155' }]}>{item.rating ? `★ ${item.rating.toFixed(1)}` : 'Sin puntuación'}</Text>
                     </View>
 
                     <Text numberOfLines={1} style={[styles.dateSummary, { color: isDark ? '#94A3B8' : '#64748B' }]}>{renderDateSummary(item)}</Text>
+
+                    <View style={styles.itemActionsRow}>
+                      <TouchableOpacity
+                        style={[styles.itemActionBtn, styles.itemActionEdit]}
+                        onPress={(event: any) => {
+                          event?.stopPropagation?.();
+                          openEditor(item);
+                        }}
+                      >
+                        <MaterialIcons name="edit" size={14} color="#FFFFFF" />
+                        <Text style={styles.itemActionText}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.itemActionBtn, styles.itemActionDelete]}
+                        onPress={(event: any) => {
+                          event?.stopPropagation?.();
+                          removeItem(item.id);
+                        }}
+                      >
+                        <MaterialIcons name="delete" size={14} color="#FFFFFF" />
+                        <Text style={styles.itemActionText}>Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -469,16 +496,6 @@ function TrackedScreen() {
                   <View key={item.id}>
                     {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
                     {cardContent}
-                    <View style={styles.webActionsRow}>
-                      <TouchableOpacity style={[styles.webActionBtn, styles.webActionEdit]} onPress={() => openEditor(item)}>
-                        <MaterialIcons name="edit" size={16} color="#FFFFFF" />
-                        <Text style={styles.webActionText}>Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.webActionBtn, styles.webActionDelete]} onPress={() => removeItem(item.id)}>
-                        <MaterialIcons name="delete" size={16} color="#FFFFFF" />
-                        <Text style={styles.webActionText}>Eliminar</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
                 );
               }
@@ -639,6 +656,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  topSection: {
+    width: '100%',
+  },
+  topSectionWeb: {
+    maxWidth: 1040,
+    alignSelf: 'center',
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -796,6 +820,11 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     zIndex: 1,
   },
+  listWeb: {
+    width: '100%',
+    maxWidth: 1040,
+    alignSelf: 'center',
+  },
   statusSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',
@@ -834,32 +863,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 14,
   },
-  webActionsRow: {
-    marginTop: -4,
-    marginBottom: 12,
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'flex-end',
-  },
-  webActionBtn: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  webActionEdit: {
-    backgroundColor: '#0E7490',
-  },
-  webActionDelete: {
-    backgroundColor: '#DC2626',
-  },
-  webActionText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   poster: {
     width: 70,
     height: 102,
@@ -869,11 +872,39 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     marginLeft: 10,
+    position: 'relative',
+    minHeight: 102,
+    paddingTop: 2,
+    paddingRight: 2,
+  },
+  ratingCorner: {
+    position: 'absolute',
+    top: -1,
+    right: 0,
+    fontSize: 12,
+    fontWeight: '800',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  ratingCornerLight: {
+    color: '#7C2D12',
+    backgroundColor: '#FDE68A',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  ratingCornerDark: {
+    color: '#FEF3C7',
+    backgroundColor: '#78350F',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingRight: 54,
   },
   cardTitle: {
     flex: 1,
@@ -882,10 +913,9 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   metaRow: {
-    marginTop: 8,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   statusBadge: {
     borderWidth: 1,
@@ -897,15 +927,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  ratingText: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '700',
-  },
   dateSummary: {
     marginTop: 6,
     fontSize: 11,
     color: '#64748B',
+  },
+  itemActionsRow: {
+    marginTop: 'auto',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    paddingTop: 8,
+  },
+  itemActionBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  itemActionEdit: {
+    backgroundColor: '#0E7490',
+  },
+  itemActionDelete: {
+    backgroundColor: '#DC2626',
+  },
+  itemActionText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   modalBackdrop: {
     flex: 1,
