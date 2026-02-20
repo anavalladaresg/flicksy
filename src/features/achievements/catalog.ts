@@ -1,7 +1,7 @@
 import { TrackedItem } from '../../types';
 
 export type AchievementCategory = 'Objetivos' | 'Descubrimiento' | 'Coleccionismo';
-export type AchievementRarity = 'Comun' | 'Raro' | 'Epico' | 'Legendario';
+export type AchievementRarity = 'Común' | 'Raro' | 'Epico' | 'Legendario';
 
 export type AchievementDefinition = {
   id: string;
@@ -59,7 +59,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
     description: 'Cumple al menos un objetivo semanal o mensual.',
     category: 'Objetivos',
     icon: 'flag',
-    rarity: 'Comun',
+    rarity: 'Común',
     unlockWhen: (stats) => stats.movieGoalReached || stats.gameGoalReached || stats.goalSuccessCount >= 1,
   },
   {
@@ -86,7 +86,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
     description: 'Explora al menos 3 generos distintos.',
     category: 'Descubrimiento',
     icon: 'travel-explore',
-    rarity: 'Comun',
+    rarity: 'Común',
     unlockWhen: (stats) => stats.topGenresCount >= 3,
   },
   {
@@ -113,7 +113,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
     description: 'Guarda 25 items en tu biblioteca.',
     category: 'Coleccionismo',
     icon: 'collections-bookmark',
-    rarity: 'Comun',
+    rarity: 'Común',
     unlockWhen: (stats) => stats.libraryCount >= 25,
   },
   {

@@ -34,7 +34,6 @@ export function useAuthStatus() {
           (user?.externalAccounts as any[])?.find((account: any) => account?.provider === 'oauth_google')?.imageUrl ||
           null;
         await syncOwnProfile(preferredName, {
-          displayName: preferredName.trim(),
           fallbackAvatarUrl: googleAccountImage,
         });
         lastSyncedUserRef.current = userId;

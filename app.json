@@ -23,7 +23,8 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./public/favicon.ico",
+      "themeColor": "#0A7EA4"
     },
     "plugins": [
       "expo-router",

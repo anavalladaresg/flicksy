@@ -4,11 +4,12 @@ import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, Text, TextInput, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Fonts } from '@/constants/theme';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { LoadingProvider } from '../src/providers/LoadingProvider';
 import { CLERK_PUBLISHABLE_KEY, isClerkConfigured } from '../src/services/clerk';
@@ -22,7 +23,18 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+let globalFontApplied = false;
+
 export default function RootLayout() {
+  if (!globalFontApplied) {
+    const globalFontFamily = (Platform.OS === 'web' ? Fonts.web?.sans : Fonts.sans) || 'System';
+    Text.defaultProps = Text.defaultProps || {};
+    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: globalFontFamily }];
+    TextInput.defaultProps = TextInput.defaultProps || {};
+    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: globalFontFamily }];
+    globalFontApplied = true;
+  }
+
   if (!isClerkConfigured) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B1220', paddingHorizontal: 20 }}>
