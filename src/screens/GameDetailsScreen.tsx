@@ -9,6 +9,9 @@ import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
     Image,
+    Modal,
+    Platform,
+    Pressable,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -20,6 +23,7 @@ import { ErrorMessage } from '../components/ui/ErrorMessage';
 import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { useGameDetails } from '../features/games/presentation/hooks';
+import { useEscapeClose } from '../hooks/use-escape-close';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
 import type { TrackedItem } from '../types';
@@ -33,6 +37,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   route,
   navigation,
 }) => {
+  const RootContainer = Platform.OS === 'web' ? View : SafeAreaView;
   const isDark = useColorScheme() === 'dark';
   const { gameId, fromFriendId, fromFriendName } = route.params;
   const { data: game, isLoading, isError, refetch } = useGameDetails(gameId);
@@ -49,6 +54,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const [finishedAtApproximate, setFinishedAtApproximate] = useState(false);
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
+  const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
 
   const isTracked = trackedItems.some(
     (item) => item.externalId === gameId && item.mediaType === 'game'
@@ -137,6 +143,10 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
     )
     .filter((url): url is string => Boolean(url))
     .slice(0, 10);
+  const summaryText = game?.summary?.trim() || 'Resumen no disponible en español por ahora.';
+  const storylineText = game?.storyline?.trim() || 'Historia no disponible en español por ahora.';
+
+  useEscapeClose(Boolean(selectedScreenshotUrl), () => setSelectedScreenshotUrl(null));
 
   const handleConfirmAdd = () => {
     if (!game) return;
@@ -201,36 +211,36 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <CenteredOverlay>
           <MagicLoader size={54} text="Cargando detalles..." />
         </CenteredOverlay>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <ErrorMessage
           message="No se pudo cargar los detalles del videojuego"
           onRetry={() => refetch()}
         />
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (!game) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <Text>Videojuego no encontrado</Text>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#fff' }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <RootContainer style={[styles.container, isDark && styles.containerDark]}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -380,39 +390,56 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
           {screenshotUrls.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Screenshots</Text>
+              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Capturas</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.screenshotsRow}
               >
                 {screenshotUrls.map((url, index) => (
-                  <Image key={`${url}-${index}`} source={{ uri: url }} style={styles.screenshotImage} resizeMode="cover" />
+                  <TouchableOpacity key={`${url}-${index}`} activeOpacity={0.85} onPress={() => setSelectedScreenshotUrl(url)}>
+                    <Image source={{ uri: url }} style={styles.screenshotImage} resizeMode="cover" />
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             </>
           )}
 
-          {game.summary && (
-            <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
-              <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-                <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{game.summary}</Text>
-              </View>
-            </>
-          )}
+          <>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
+            <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
+              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{summaryText}</Text>
+            </View>
+          </>
 
-          {game.storyline && (
-            <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Historia</Text>
-              <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-                <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{game.storyline}</Text>
-              </View>
-            </>
-          )}
+          <>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Historia</Text>
+            <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
+              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{storylineText}</Text>
+            </View>
+          </>
 
         </View>
       </ScrollView>
+      <Modal
+        visible={Boolean(selectedScreenshotUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedScreenshotUrl(null)}
+      >
+        <Pressable style={styles.screenshotModalBackdrop} onPress={() => setSelectedScreenshotUrl(null)}>
+          <Pressable style={styles.screenshotModalCard} onPress={(event) => event.stopPropagation()}>
+            <TouchableOpacity style={styles.screenshotCloseButton} onPress={() => setSelectedScreenshotUrl(null)}>
+              <MaterialIcons name="close" size={20} color="#E2E8F0" />
+            </TouchableOpacity>
+            {selectedScreenshotUrl ? (
+              <View style={styles.screenshotModalMedia}>
+                <Image source={{ uri: selectedScreenshotUrl }} style={styles.screenshotModalImage} resizeMode="cover" />
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
       <RatingPickerModal
         visible={isRatingOpen}
         title={game.name}
@@ -436,7 +463,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
       />
-    </SafeAreaView>
+    </RootContainer>
   );
 };
 
@@ -445,8 +472,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  containerDark: {
+    backgroundColor: '#111827',
+  },
   scrollContent: {
     paddingBottom: 26,
+  },
+  scrollView: {
+    ...(Platform.OS === 'web' ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any) : {}),
   },
   header: {
     position: 'absolute',
@@ -711,6 +744,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F2937',
     backgroundColor: '#0F172A',
+  },
+  screenshotModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2,6,23,0.78)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 24,
+  },
+  screenshotModalCard: {
+    width: '100%',
+    maxWidth: 1100,
+    height: '86%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0B1220',
+    overflow: 'hidden',
+  },
+  screenshotModalMedia: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#020617',
+  },
+  screenshotCloseButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(15,23,42,0.84)',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  screenshotModalImage: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
   },
   sectionTitle: {
     fontSize: 13,

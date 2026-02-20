@@ -79,10 +79,16 @@ export default function TabLayout() {
       tabBar={webTabBar}
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor: colorScheme === 'dark' ? '#94A3B8' : '#64748B',
         headerShown: false,
         tabBarButton: isWeb ? undefined : HapticTab,
         tabBarPosition: isWeb ? 'top' : 'bottom',
-        tabBarStyle: isWeb ? { display: 'none' } : undefined,
+        tabBarStyle: isWeb
+          ? { display: 'none' }
+          : {
+              backgroundColor: colorScheme === 'dark' ? '#4d73b5' : '#FFFFFF',
+              borderTopColor: colorScheme === 'dark' ? '#4170c2' : '#E2E8F0',
+            },
       }}>
       <Tabs.Screen
         name="index"

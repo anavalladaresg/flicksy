@@ -325,7 +325,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   filtersRow: {
-    paddingVertical: 4,
+    paddingTop: 8,
+    paddingBottom: 4,
     gap: 8,
   },
   filterChip: {
@@ -361,7 +362,7 @@ const styles = StyleSheet.create({
   },
   chipCounter: {
     position: 'absolute',
-    top: -5,
+    top: -3,
     right: -5,
     minWidth: 16,
     height: 16,
@@ -377,7 +378,8 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 11,
+    lineHeight: 9,
+    ...(Platform.OS === 'android' ? ({ includeFontPadding: false } as const) : null),
   },
   sortAnchor: {
     position: 'relative',

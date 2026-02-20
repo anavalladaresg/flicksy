@@ -15,14 +15,35 @@ export default function Root({ children }: { children: ReactNode }) {
         />
         <link
           rel="icon"
-          type="image/png"
-          href={`/assets/images/favicon.png?v=${FAVICON_VERSION}`}
+          type="image/x-icon"
+          href={`/favicon.ico?v=${FAVICON_VERSION}`}
         />
         <link
           rel="shortcut icon"
-          type="image/png"
-          href={`/assets/images/favicon.png?v=${FAVICON_VERSION}`}
+          type="image/x-icon"
+          href={`/favicon.ico?v=${FAVICON_VERSION}`}
         />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href={`/favicon.png?v=${FAVICON_VERSION}`}
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href={`/apple-touch-icon.png?v=${FAVICON_VERSION}`}
+        />
+        <style>{`
+          [data-testid="floating-modal-sheet"] * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          [data-testid="floating-modal-sheet"] *::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+          }
+        `}</style>
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

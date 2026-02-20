@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 type DynamicTopTabsProps = BottomTabBarProps & {
   isDark: boolean;
@@ -30,8 +30,8 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
 
   const colors = useMemo(
     () => ({
-      container: isDark ? 'rgba(11,18,32,0.72)' : 'rgba(255,255,255,0.7)',
-      border: isDark ? 'rgba(148,163,184,0.24)' : 'rgba(148,163,184,0.3)',
+      container: isDark ? 'rgba(30,41,59,0.18)' : 'rgba(255,255,255,0.7)',
+      border: isDark ? 'rgba(125,211,252,0.28)' : 'rgba(148,163,184,0.3)',
       text: isDark ? '#E2E8F0' : '#0F172A',
       mutedText: isDark ? '#94A3B8' : '#475569',
       highlight: isDark ? 'rgba(125,211,252,0.2)' : 'rgba(14,116,144,0.14)',
@@ -82,6 +82,12 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
             borderColor: colors.border,
             shadowColor: colors.glow,
           },
+          Platform.OS === 'web'
+            ? ({
+                backdropFilter: isDark ? 'none' : 'blur(16px)',
+                WebkitBackdropFilter: isDark ? 'none' : 'blur(16px)',
+              } as any)
+            : null,
         ]}
       >
         <Animated.View
@@ -89,7 +95,7 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
           style={[
             styles.sheen,
             {
-              opacity: isDark ? 0.18 : 0.12,
+              opacity: isDark ? 0.08 : 0.12,
               transform: [{ translateX: sheenTranslate }, { rotate: '14deg' }],
             },
           ]}
@@ -232,7 +238,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
-    backdropFilter: 'blur(16px)' as any,
   },
   containerCompact: {
     width: '100%',

@@ -8,6 +8,8 @@ import { tmdbHttp } from '../../../services/http';
 import { PaginatedResponse, SearchParams, TVShow } from '../../../types';
 import { ITVRepository, Period, TVSortOption } from '../domain/repositories';
 
+const SPANISH_LANGUAGE = 'es-ES';
+
 function getDateRange(period: Period): { start: string; end: string } {
   const end = new Date();
   const start = new Date();
@@ -23,7 +25,7 @@ export class TVRepository implements ITVRepository {
   async getPopularTVShows(page: number = 1): Promise<PaginatedResponse<TVShow>> {
     try {
       const response = await tmdbHttp.get('/tv/popular', {
-        params: { page },
+        params: { page, language: SPANISH_LANGUAGE },
       });
 
       return {
@@ -43,6 +45,7 @@ export class TVRepository implements ITVRepository {
         params: {
           query: params.query,
           page: params.page || 1,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -68,6 +71,7 @@ export class TVRepository implements ITVRepository {
           sort_by: sortBy,
           include_adult: false,
           vote_count_gte: sortBy === 'vote_average.desc' ? 150 : 20,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -93,6 +97,7 @@ export class TVRepository implements ITVRepository {
           'first_air_date.lte': end,
           include_adult: false,
           vote_count_gte: 10,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -112,7 +117,7 @@ export class TVRepository implements ITVRepository {
       let response;
       if (period === 'week') {
         response = await tmdbHttp.get('/trending/tv/week', {
-          params: { page: 1 },
+          params: { page: 1, language: SPANISH_LANGUAGE },
         });
       } else {
         const { start, end } = getDateRange(period);
@@ -124,6 +129,7 @@ export class TVRepository implements ITVRepository {
             'first_air_date.lte': end,
             include_adult: false,
             vote_count_gte: 50,
+            language: SPANISH_LANGUAGE,
           },
         });
       }
@@ -144,6 +150,7 @@ export class TVRepository implements ITVRepository {
       const response = await tmdbHttp.get(`/tv/${id}`, {
         params: {
           append_to_response: 'credits,videos,translations,watch/providers',
+          language: SPANISH_LANGUAGE,
         },
       });
 
