@@ -79,7 +79,9 @@ export default function TabLayout() {
     <Tabs
       tabBar={webTabBar}
       screenOptions={{
-        sceneStyle: { backgroundColor: sceneBackground },
+        sceneStyle: {
+          backgroundColor: sceneBackground,
+        },
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarInactiveTintColor: colorScheme === 'dark' ? '#94A3B8' : '#64748B',
         headerShown: false,

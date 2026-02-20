@@ -46,6 +46,7 @@ const STATUS_COLORS: Record<TrackedItem['status'], string> = {
   completed: '#16A34A',
   dropped: '#B91C1C',
 };
+const WEB_TOP_TABS_OFFSET = 72;
 
 function resolveTrackedPoster(item: TrackedItem): string | null {
   if (!item.posterPath) return null;
@@ -716,6 +717,7 @@ const styles = StyleSheet.create({
   topSectionWeb: {
     maxWidth: 1160,
     alignSelf: 'center',
+    paddingTop: WEB_TOP_TABS_OFFSET,
   },
   header: {
     paddingHorizontal: 16,

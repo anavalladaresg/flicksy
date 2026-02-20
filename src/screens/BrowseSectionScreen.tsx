@@ -48,6 +48,11 @@ const GAME_SORTS: { value: GameSortOption; label: string }[] = [
   { value: 'first_release_date.desc', label: 'Lanzamiento reciente' },
 ];
 
+const RECENT_SCROLL_MIN_OFFSET = 80;
+const RECENT_SCROLL_MAX_AGE_MS = 1000 * 60 * 20;
+
+const browseScrollMemory: Partial<Record<BrowseType, { offsetY: number; savedAt: number }>> = {};
+
 function dedupeItems(items: BrowseItem[]): BrowseItem[] {
   const seen = new Set<number>();
   return items.filter((item) => {
@@ -106,9 +111,13 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const isWeb = Platform.OS === 'web';
+  const RootContainer = isWeb ? View : SafeAreaView;
   const entranceAnim = useState(new Animated.Value(0))[0];
   const auraAnim = useRef(new Animated.Value(0)).current;
   const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const lastScrollOffsetRef = useRef(0);
+  const [recentScrollOffset, setRecentScrollOffset] = useState<number | null>(null);
 
   const [movieSort, setMovieSort] = useState<MovieSortOption>('popularity.desc');
   const [tvSort, setTVSort] = useState<TVSortOption>('popularity.desc');
@@ -128,6 +137,20 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
     setPage(1);
     setItems([]);
   }, [type, currentSort]);
+
+  useEffect(() => {
+    const snapshot = browseScrollMemory[type];
+    if (!snapshot) {
+      setRecentScrollOffset(null);
+      return;
+    }
+    const age = Date.now() - snapshot.savedAt;
+    if (age > RECENT_SCROLL_MAX_AGE_MS || snapshot.offsetY < RECENT_SCROLL_MIN_OFFSET) {
+      setRecentScrollOffset(null);
+      return;
+    }
+    setRecentScrollOffset(snapshot.offsetY);
+  }, [type]);
 
   useEffect(() => {
     if (!activeQuery.data) return;
@@ -170,6 +193,20 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
     return () => loop.stop();
   }, [auraAnim]);
 
+  useEffect(() => {
+    return () => {
+      const currentOffset = lastScrollOffsetRef.current;
+      if (currentOffset < RECENT_SCROLL_MIN_OFFSET) {
+        delete browseScrollMemory[type];
+        return;
+      }
+      browseScrollMemory[type] = {
+        offsetY: currentOffset,
+        savedAt: Date.now(),
+      };
+    };
+  }, [type]);
+
   const title = type === 'movie' ? 'Películas' : type === 'tv' ? 'Series' : 'Videojuegos';
   const hasMore = activeQuery.data ? page < activeQuery.data.totalPages : false;
 
@@ -177,8 +214,18 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
     return type === 'movie' ? MOVIE_SORTS : type === 'tv' ? TV_SORTS : GAME_SORTS;
   }, [type]);
 
+  function restoreRecentPosition() {
+    if (recentScrollOffset == null) return;
+    const targetOffset = Math.max(0, recentScrollOffset);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: targetOffset, animated: true });
+      setTimeout(() => scrollRef.current?.scrollTo({ y: targetOffset, animated: true }), 150);
+    });
+    setRecentScrollOffset(null);
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+    <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
       {isWeb ? (
         <>
           <Animated.View
@@ -256,8 +303,13 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
       </Animated.View>
 
       <Animated.ScrollView
+        ref={scrollRef as any}
         style={{ opacity: entranceAnim }}
         contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}
+        onScroll={(event) => {
+          lastScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
         <ScrollView
           horizontal
@@ -361,7 +413,17 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
           </>
         )}
       </Animated.ScrollView>
-    </SafeAreaView>
+      {recentScrollOffset != null ? (
+        <TouchableOpacity
+          style={[styles.recentButton, isDark && styles.recentButtonDark]}
+          onPress={restoreRecentPosition}
+          activeOpacity={0.88}
+        >
+          <MaterialIcons name="history" size={14} color="#FFFFFF" />
+          <Text style={styles.recentButtonText}>Visto justo ahora</Text>
+        </TouchableOpacity>
+      ) : null}
+    </RootContainer>
   );
 }
 
@@ -571,6 +633,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#991B1B',
     marginTop: 10,
+  },
+  recentButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 18,
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(125,211,252,0.55)',
+    backgroundColor: '#0E7490',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 10px 20px rgba(2,6,23,0.3)',
+          transitionDuration: '240ms',
+          transitionProperty: 'opacity',
+        } as any)
+      : null),
+  },
+  recentButtonDark: {
+    borderColor: 'rgba(125,211,252,0.3)',
+    backgroundColor: '#0E7490',
+  },
+  recentButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.15,
   },
 });
 

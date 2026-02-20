@@ -23,6 +23,7 @@ import { useSearchTVShows } from '../features/tv/presentation/hooks';
 import { Game, Movie, TVShow } from '../types';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
+const WEB_TOP_TABS_OFFSET = 72;
 
 type SearchType = 'all' | 'movie' | 'tv' | 'game';
 
@@ -328,7 +329,7 @@ function SearchScreen() {
 
   return (
     <RootContainer style={[styles.container, { backgroundColor: palette.background }]}> 
-      <View style={[styles.headerWrap, isWeb && { paddingTop: 12 }]}>
+      <View style={[styles.headerWrap, isWeb && styles.headerWrapWebOffset]}>
       <View
         style={[
           styles.header,
@@ -582,6 +583,9 @@ const styles = StyleSheet.create({
   },
   headerWrap: {
     zIndex: 2,
+  },
+  headerWrapWebOffset: {
+    paddingTop: WEB_TOP_TABS_OFFSET + 12,
   },
   headerWeb: {
     width: '100%',

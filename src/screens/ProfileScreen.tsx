@@ -37,6 +37,8 @@ import { MediaType, TrackedItem } from '../types';
 import { ACHIEVEMENT_DEFINITIONS } from '../features/achievements/catalog';
 import MagicLoader from '@/components/loaders/MagicLoader';
 
+const WEB_TOP_TABS_OFFSET = 72;
+
 function averageRating(items: TrackedItem[], type: MediaType): number {
   const filtered = items.filter((item) => item.mediaType === type && typeof item.rating === 'number');
   if (filtered.length === 0) return 0;
@@ -1086,6 +1088,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1160,
     alignSelf: 'center',
+    paddingTop: WEB_TOP_TABS_OFFSET,
   },
   contentWebMobile: {
     gap: 16,
