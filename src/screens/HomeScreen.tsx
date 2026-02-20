@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
   },
   scrollContentWeb: {
     width: '100%',
-    maxWidth: 1240,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   centered: {

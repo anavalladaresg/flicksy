@@ -49,18 +49,7 @@ tmdbHttp.interceptors.request.use((config) => {
 
 igdbHttp.interceptors.request.use((config) => {
   // Web calls go through the Vercel proxy, which injects IGDB credentials server-side.
-  if (isWebRuntime) {
-    if (DEBUG_IGDB) {
-      const rawUrl = String(config.url || '');
-      const endpoint = rawUrl.replace(/^\/+/, '').split('?')[0];
-      console.log('[IGDB][web][request]', {
-        baseURL: config.baseURL,
-        originalEndpoint: endpoint || '(empty)',
-        finalUrl: config.url,
-        params: config.params,
-      });
-    }
-  } else {
+  if (!isWebRuntime) {
     config.headers = {
       ...config.headers,
       'Client-ID': IGDB_CLIENT_ID,

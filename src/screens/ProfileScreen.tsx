@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
   },
   contentWeb: {
     width: '100%',
-    maxWidth: 1180,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   contentWebMobile: {
