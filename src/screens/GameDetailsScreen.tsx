@@ -3,7 +3,7 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
@@ -23,7 +23,6 @@ import { ErrorMessage } from '../components/ui/ErrorMessage';
 import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { useGameDetails } from '../features/games/presentation/hooks';
-import { useEscapeClose } from '../hooks/use-escape-close';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
 import { useTrackingStore } from '../store/tracking';
 import type { TrackedItem } from '../types';
@@ -55,6 +54,17 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
   const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
+  const [screenshotZoom, setScreenshotZoom] = useState(1);
+  const [screenshotViewport, setScreenshotViewport] = useState({ width: 0, height: 0 });
+  const [screenshotNaturalSize, setScreenshotNaturalSize] = useState({ width: 0, height: 0 });
+  const [screenshotPan, setScreenshotPan] = useState({ x: 0, y: 0 });
+  const [isScreenshotDragging, setIsScreenshotDragging] = useState(false);
+  const screenshotDragStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   const isTracked = trackedItems.some(
     (item) => item.externalId === gameId && item.mediaType === 'game'
@@ -146,7 +156,130 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const summaryText = game?.summary?.trim() || 'Resumen no disponible en español por ahora.';
   const storylineText = game?.storyline?.trim() || 'Historia no disponible en español por ahora.';
 
-  useEscapeClose(Boolean(selectedScreenshotUrl), () => setSelectedScreenshotUrl(null));
+  useEffect(() => {
+    if (!selectedScreenshotUrl) return;
+    setScreenshotZoom(1);
+    setScreenshotNaturalSize({ width: 0, height: 0 });
+    setScreenshotPan({ x: 0, y: 0 });
+    screenshotDragStartRef.current = null;
+    setIsScreenshotDragging(false);
+  }, [selectedScreenshotUrl]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !selectedScreenshotUrl) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      (event as any).stopImmediatePropagation?.();
+      setSelectedScreenshotUrl(null);
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [selectedScreenshotUrl]);
+
+  const fittedScreenshotSize = (() => {
+    if (!screenshotViewport.width || !screenshotViewport.height || !screenshotNaturalSize.width || !screenshotNaturalSize.height) {
+      return {
+        width: screenshotViewport.width || 0,
+        height: screenshotViewport.height || 0,
+      };
+    }
+
+    const viewportRatio = screenshotViewport.width / screenshotViewport.height;
+    const imageRatio = screenshotNaturalSize.width / screenshotNaturalSize.height;
+    if (imageRatio >= viewportRatio) {
+      const width = screenshotViewport.width;
+      return { width, height: width / imageRatio };
+    }
+    const height = screenshotViewport.height;
+    return { width: height * imageRatio, height };
+  })();
+
+  const clampScreenshotPan = useCallback(
+    (nextX: number, nextY: number, zoomValue: number) => {
+      const scaledWidth = fittedScreenshotSize.width * zoomValue;
+      const scaledHeight = fittedScreenshotSize.height * zoomValue;
+      const maxX = Math.max(0, (scaledWidth - screenshotViewport.width) / 2);
+      const maxY = Math.max(0, (scaledHeight - screenshotViewport.height) / 2);
+      return {
+        x: Math.max(-maxX, Math.min(maxX, nextX)),
+        y: Math.max(-maxY, Math.min(maxY, nextY)),
+      };
+    },
+    [fittedScreenshotSize.height, fittedScreenshotSize.width, screenshotViewport.height, screenshotViewport.width]
+  );
+
+  function applyScreenshotZoom(nextValue: number) {
+    const clampedZoom = Math.max(1, Math.min(4, Number(nextValue.toFixed(2))));
+    setScreenshotZoom(clampedZoom);
+    setScreenshotPan((prev) => clampScreenshotPan(prev.x, prev.y, clampedZoom));
+  }
+
+  useEffect(() => {
+    setScreenshotPan((prev) => {
+      const next = clampScreenshotPan(prev.x, prev.y, screenshotZoom);
+      if (next.x === prev.x && next.y === prev.y) return prev;
+      return next;
+    });
+  }, [
+    clampScreenshotPan,
+    screenshotZoom,
+    screenshotViewport.width,
+    screenshotViewport.height,
+    screenshotNaturalSize.width,
+    screenshotNaturalSize.height,
+  ]);
+
+  const screenshotScaledSize = {
+    width: Math.max(1, fittedScreenshotSize.width * screenshotZoom),
+    height: Math.max(1, fittedScreenshotSize.height * screenshotZoom),
+  };
+
+  const screenshotMediaWebHandlers =
+    Platform.OS === 'web'
+      ? ({
+          onWheel: (event: any) => {
+            event.preventDefault?.();
+            const deltaY = event?.deltaY ?? event?.nativeEvent?.deltaY ?? 0;
+            const zoomStep = deltaY > 0 ? -0.18 : 0.18;
+            applyScreenshotZoom(screenshotZoom + zoomStep);
+          },
+          onMouseDown: (event: any) => {
+            if (screenshotZoom <= 1) return;
+            event.preventDefault?.();
+            const clientX = event?.clientX ?? event?.nativeEvent?.clientX ?? 0;
+            const clientY = event?.clientY ?? event?.nativeEvent?.clientY ?? 0;
+            screenshotDragStartRef.current = {
+              clientX,
+              clientY,
+              startX: screenshotPan.x,
+              startY: screenshotPan.y,
+            };
+            setIsScreenshotDragging(true);
+          },
+          onMouseMove: (event: any) => {
+            const dragStart = screenshotDragStartRef.current;
+            if (!dragStart || screenshotZoom <= 1) return;
+            const clientX = event?.clientX ?? event?.nativeEvent?.clientX ?? 0;
+            const clientY = event?.clientY ?? event?.nativeEvent?.clientY ?? 0;
+            const next = clampScreenshotPan(
+              dragStart.startX + (clientX - dragStart.clientX),
+              dragStart.startY + (clientY - dragStart.clientY),
+              screenshotZoom
+            );
+            setScreenshotPan(next);
+          },
+          onMouseUp: () => {
+            screenshotDragStartRef.current = null;
+            setIsScreenshotDragging(false);
+          },
+          onMouseLeave: () => {
+            screenshotDragStartRef.current = null;
+            setIsScreenshotDragging(false);
+          },
+        } as any)
+      : null;
 
   const handleConfirmAdd = () => {
     if (!game) return;
@@ -432,9 +565,67 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
             <TouchableOpacity style={styles.screenshotCloseButton} onPress={() => setSelectedScreenshotUrl(null)}>
               <MaterialIcons name="close" size={20} color="#E2E8F0" />
             </TouchableOpacity>
+            <View style={styles.screenshotZoomControls}>
+              <TouchableOpacity
+                style={styles.screenshotZoomButton}
+                onPress={() => applyScreenshotZoom(screenshotZoom - 0.25)}
+              >
+                <MaterialIcons name="remove" size={16} color="#E2E8F0" />
+              </TouchableOpacity>
+              <Text style={styles.screenshotZoomText}>{Math.round(screenshotZoom * 100)}%</Text>
+              <TouchableOpacity
+                style={styles.screenshotZoomButton}
+                onPress={() => {
+                  applyScreenshotZoom(1);
+                  setScreenshotPan({ x: 0, y: 0 });
+                }}
+              >
+                <MaterialIcons name="refresh" size={14} color="#E2E8F0" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.screenshotZoomButton}
+                onPress={() => applyScreenshotZoom(screenshotZoom + 0.25)}
+              >
+                <MaterialIcons name="add" size={16} color="#E2E8F0" />
+              </TouchableOpacity>
+            </View>
             {selectedScreenshotUrl ? (
-              <View style={styles.screenshotModalMedia}>
-                <Image source={{ uri: selectedScreenshotUrl }} style={styles.screenshotModalImage} resizeMode="cover" />
+              <View
+                style={[
+                  styles.screenshotModalMedia,
+                  Platform.OS === 'web'
+                    ? ({
+                        cursor: screenshotZoom > 1 ? (isScreenshotDragging ? 'grabbing' : 'grab') : 'zoom-in',
+                      } as any)
+                    : null,
+                ]}
+                onLayout={(event) => {
+                  const { width, height } = event.nativeEvent.layout;
+                  if (!width || !height) return;
+                  setScreenshotViewport((prev) =>
+                    prev.width === width && prev.height === height ? prev : { width, height }
+                  );
+                }}
+                {...(screenshotMediaWebHandlers ?? {})}
+              >
+                <Image
+                  source={{ uri: selectedScreenshotUrl }}
+                  style={[
+                    styles.screenshotModalImage,
+                    {
+                      width: screenshotScaledSize.width,
+                      height: screenshotScaledSize.height,
+                      transform: [{ translateX: screenshotPan.x }, { translateY: screenshotPan.y }],
+                    },
+                  ]}
+                  resizeMode="contain"
+                  onLoad={(event) => {
+                    const source = event.nativeEvent?.source;
+                    const width = source?.width ?? 0;
+                    const height = source?.height ?? 0;
+                    if (width && height) setScreenshotNaturalSize({ width, height });
+                  }}
+                />
               </View>
             ) : null}
           </Pressable>
@@ -754,20 +945,52 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   screenshotModalCard: {
-    width: '100%',
-    maxWidth: 1100,
-    height: '86%',
+    width: '92%',
+    maxWidth: 820,
+    height: '78%',
+    maxHeight: 760,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#334155',
     backgroundColor: '#0B1220',
     overflow: 'hidden',
   },
+  screenshotZoomControls: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 2,
+  },
+  screenshotZoomButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15,23,42,0.84)',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenshotZoomText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 42,
+    textAlign: 'center',
+  },
   screenshotModalMedia: {
+    marginTop: 42,
     flex: 1,
     width: '100%',
     overflow: 'hidden',
     backgroundColor: '#020617',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   screenshotCloseButton: {
     position: 'absolute',
@@ -784,8 +1007,6 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   screenshotModalImage: {
-    width: '100%',
-    height: '100%',
     display: 'flex',
   },
   sectionTitle: {

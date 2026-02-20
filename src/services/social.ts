@@ -15,7 +15,7 @@ let profilesAvatarColumnSupported: boolean | null = null;
 let avatarColumnProbePromise: Promise<boolean> | null = null;
 const EQUIVALENT_IDS_TTL_MS = 15_000;
 const equivalentOwnIdsCache = new Map<string, { ids: string[]; expiresAt: number }>();
-const SOCIAL_DEBUG_ENABLED = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
+const SOCIAL_DEBUG_ENABLED = false;
 
 function socialDebug(scope: string, payload?: Record<string, unknown>) {
   if (!SOCIAL_DEBUG_ENABLED) return;

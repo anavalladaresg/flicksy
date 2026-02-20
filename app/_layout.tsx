@@ -193,6 +193,22 @@ function RootLayoutContent() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof document === 'undefined') return;
+    const desiredTitle = 'Flicksy';
+    document.title = desiredTitle;
+
+    const titleNode = document.querySelector('title');
+    if (!titleNode || typeof MutationObserver === 'undefined') return;
+
+    const observer = new MutationObserver(() => {
+      if (document.title !== desiredTitle) document.title = desiredTitle;
+    });
+    observer.observe(titleNode, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (isSignedIn) {
       void useTrackingStore.getState().bootstrapRemote();
     } else {
