@@ -220,7 +220,7 @@ function RootLayoutContent() {
           <Stack screenOptions={{ contentStyle: { backgroundColor: appTheme.colors.background } }}>
             <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="browse/[type]" options={{ headerShown: false }} />
+            <Stack.Screen name="browse/[type]" options={floatingModalOptions} />
             <Stack.Screen name="movie/[id]" options={floatingModalOptions} />
             <Stack.Screen name="tv/[id]" options={floatingModalOptions} />
             <Stack.Screen name="game/[id]" options={floatingModalOptions} />

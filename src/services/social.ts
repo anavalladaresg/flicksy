@@ -13,6 +13,19 @@ const PROFILE_SELECT_WITH_AVATAR = 'id,username,display_name,avatar_url';
 const PROFILE_SELECT_BASE = 'id,username,display_name';
 let profilesAvatarColumnSupported: boolean | null = null;
 let avatarColumnProbePromise: Promise<boolean> | null = null;
+const EQUIVALENT_IDS_TTL_MS = 15_000;
+const equivalentOwnIdsCache = new Map<string, { ids: string[]; expiresAt: number }>();
+const SOCIAL_DEBUG_ENABLED = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
+
+function socialDebug(scope: string, payload?: Record<string, unknown>) {
+  if (!SOCIAL_DEBUG_ENABLED) return;
+  const now = new Date().toISOString();
+  if (payload) {
+    console.log(`[social-debug][${now}] ${scope}`, payload);
+    return;
+  }
+  console.log(`[social-debug][${now}] ${scope}`);
+}
 
 function isMissingAvatarColumnError(error: any): boolean {
   const raw = String(error?.message || error?.details || '').toLowerCase();
@@ -50,14 +63,39 @@ function normalizeProfileRow(row: any): FriendProfile {
 
 async function queryProfilesByIds(ids: string[]): Promise<FriendProfile[]> {
   if (!supabase || ids.length === 0) return [];
+  socialDebug('queryProfilesByIds:start', { ids });
   if (await hasProfilesAvatarColumn()) {
     const withAvatar = await supabase.from('profiles').select(PROFILE_SELECT_WITH_AVATAR).in('id', ids);
-    if (!withAvatar.error) return ((withAvatar.data ?? []) as any[]).map(normalizeProfileRow);
+    if (!withAvatar.error) {
+      const rows = ((withAvatar.data ?? []) as any[]).map(normalizeProfileRow);
+      socialDebug('queryProfilesByIds:withAvatar:ok', {
+        requestedCount: ids.length,
+        returnedCount: rows.length,
+        returnedIds: rows.map((row) => row.id),
+      });
+      return rows;
+    }
+    socialDebug('queryProfilesByIds:withAvatar:error', {
+      message: withAvatar.error?.message,
+      details: withAvatar.error?.details,
+    });
     if (isMissingAvatarColumnError(withAvatar.error)) profilesAvatarColumnSupported = false;
   }
   const base = await supabase.from('profiles').select(PROFILE_SELECT_BASE).in('id', ids);
-  if (base.error) return [];
-  return ((base.data ?? []) as any[]).map(normalizeProfileRow);
+  if (base.error) {
+    socialDebug('queryProfilesByIds:base:error', {
+      message: base.error?.message,
+      details: base.error?.details,
+    });
+    return [];
+  }
+  const rows = ((base.data ?? []) as any[]).map(normalizeProfileRow);
+  socialDebug('queryProfilesByIds:base:ok', {
+    requestedCount: ids.length,
+    returnedCount: rows.length,
+    returnedIds: rows.map((row) => row.id),
+  });
+  return rows;
 }
 
 export interface FriendRequestItem {
@@ -97,44 +135,155 @@ export interface FriendCompatibility {
 
 async function getCurrentUserId(): Promise<string | null> {
   const clerk = getClerkInstance();
-  const userId = clerk.user?.id ?? null;
-  return userId;
+  const sessionUserId = (clerk as any)?.session?.user?.id;
+  const activeUserId = clerk.user?.id ?? null;
+  const resolved = sessionUserId || activeUserId;
+  socialDebug('getCurrentUserId', {
+    sessionUserId: sessionUserId ?? null,
+    activeUserId: activeUserId ?? null,
+    resolvedUserId: resolved ?? null,
+  });
+  return resolved;
 }
 
 function normalizeUsername(input: string): string {
   return input.trim().toLowerCase();
 }
 
+async function getEquivalentOwnIds(userId: string): Promise<string[]> {
+  if (!supabase) return [userId];
+  const cached = equivalentOwnIdsCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    socialDebug('getEquivalentOwnIds:cache-hit', {
+      userId,
+      equivalentIds: cached.ids,
+      expiresAt: new Date(cached.expiresAt).toISOString(),
+    });
+    return cached.ids;
+  }
+
+  const ids = new Set<string>([userId]);
+
+  const ownProfileRes = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const ownUsername = normalizeUsername((ownProfileRes.data as any)?.username ?? '');
+  socialDebug('getEquivalentOwnIds:own-profile', {
+    userId,
+    ownUsername: ownUsername || null,
+    error: ownProfileRes.error?.message ?? null,
+  });
+  if (!ownUsername) {
+    const onlySelf = [...ids];
+    socialDebug('getEquivalentOwnIds:no-username', { userId, equivalentIds: onlySelf });
+    return onlySelf;
+  }
+
+  // Legacy data can contain duplicated profile rows for the same logical username.
+  const sameUsernameRes = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', ownUsername);
+
+  socialDebug('getEquivalentOwnIds:same-username-query', {
+    userId,
+    ownUsername,
+    returnedCount: sameUsernameRes.data?.length ?? 0,
+    returnedIds: (sameUsernameRes.data ?? []).map((row: any) => row?.id).filter(Boolean),
+    error: sameUsernameRes.error?.message ?? null,
+  });
+
+  if (!sameUsernameRes.error) {
+    (sameUsernameRes.data ?? []).forEach((row: any) => {
+      if (row?.id) ids.add(String(row.id));
+    });
+  }
+  const resolved = [...ids];
+  equivalentOwnIdsCache.set(userId, { ids: resolved, expiresAt: Date.now() + EQUIVALENT_IDS_TTL_MS });
+  socialDebug('getEquivalentOwnIds:resolved', { userId, equivalentIds: resolved });
+  return resolved;
+}
+
 async function getAcceptedFriendIds(userId: string): Promise<string[]> {
   if (!supabase) return [];
-  const [friendsRes, requestsRes] = await Promise.all([
+  const ownIds = await getEquivalentOwnIds(userId);
+
+  const [friendsByOwnerRes, friendsByReverseRes, requestsFromRes, requestsToRes] = await Promise.all([
     supabase
       .from('friends')
       .select('user_id,friend_id')
-      .or(`user_id.eq.${userId},friend_id.eq.${userId}`),
+      .in('user_id', ownIds),
+    supabase
+      .from('friends')
+      .select('user_id,friend_id')
+      .in('friend_id', ownIds),
     supabase
       .from('friend_requests')
       .select('from_user_id,to_user_id')
       .eq('status', 'accepted')
-      .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`),
+      .in('from_user_id', ownIds),
+    supabase
+      .from('friend_requests')
+      .select('from_user_id,to_user_id')
+      .eq('status', 'accepted')
+      .in('to_user_id', ownIds),
   ]);
 
+  socialDebug('getAcceptedFriendIds:query-results', {
+    userId,
+    ownIds,
+    friendsByOwnerCount: friendsByOwnerRes.data?.length ?? 0,
+    friendsByOwnerRows: friendsByOwnerRes.data ?? [],
+    friendsByOwnerError: friendsByOwnerRes.error?.message ?? null,
+    friendsByReverseCount: friendsByReverseRes.data?.length ?? 0,
+    friendsByReverseRows: friendsByReverseRes.data ?? [],
+    friendsByReverseError: friendsByReverseRes.error?.message ?? null,
+    requestsFromCount: requestsFromRes.data?.length ?? 0,
+    requestsFromRows: requestsFromRes.data ?? [],
+    requestsFromError: requestsFromRes.error?.message ?? null,
+    requestsToCount: requestsToRes.data?.length ?? 0,
+    requestsToRows: requestsToRes.data ?? [],
+    requestsToError: requestsToRes.error?.message ?? null,
+  });
+
   const ids = new Set<string>();
+  const ownIdsSet = new Set(ownIds);
 
-  if (!friendsRes.error) {
-    (friendsRes.data ?? []).forEach((row: any) => {
-      ids.add(row.user_id === userId ? row.friend_id : row.user_id);
+  if (!friendsByOwnerRes.error) {
+    (friendsByOwnerRes.data ?? []).forEach((row: any) => {
+      if (row.friend_id) ids.add(String(row.friend_id));
     });
   }
 
-  if (!requestsRes.error) {
-    (requestsRes.data ?? []).forEach((row: any) => {
-      ids.add(row.from_user_id === userId ? row.to_user_id : row.from_user_id);
+  if (!friendsByReverseRes.error) {
+    (friendsByReverseRes.data ?? []).forEach((row: any) => {
+      if (row.user_id) ids.add(String(row.user_id));
     });
   }
 
-  ids.delete(userId);
-  return [...ids];
+  if (!requestsFromRes.error) {
+    (requestsFromRes.data ?? []).forEach((row: any) => {
+      if (row.to_user_id) ids.add(String(row.to_user_id));
+    });
+  }
+
+  if (!requestsToRes.error) {
+    (requestsToRes.data ?? []).forEach((row: any) => {
+      if (row.from_user_id) ids.add(String(row.from_user_id));
+    });
+  }
+
+  ownIdsSet.forEach((id) => ids.delete(id));
+  const resolved = [...ids];
+  socialDebug('getAcceptedFriendIds:resolved', {
+    userId,
+    ownIds,
+    friendIds: resolved,
+  });
+  return resolved;
 }
 
 export async function syncOwnProfile(
@@ -443,7 +592,10 @@ export async function respondFriendRequest(
   }
 
   if (decision === 'accepted') {
-    const payload = [{ user_id: request.to_user_id, friend_id: request.from_user_id }];
+    const payload = [
+      { user_id: request.to_user_id, friend_id: request.from_user_id },
+      { user_id: request.from_user_id, friend_id: request.to_user_id },
+    ];
     const fr = await supabase
       .from('friends')
       .upsert(payload, { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
@@ -484,8 +636,35 @@ export async function getFriendsList(): Promise<FriendProfile[]> {
   const userId = await getCurrentUserId();
   if (!userId) return [];
   const friendIds = await getAcceptedFriendIds(userId);
-  if (friendIds.length === 0) return [];
-  return queryProfilesByIds(friendIds);
+  if (friendIds.length === 0) {
+    socialDebug('getFriendsList:no-friends', { userId });
+    return [];
+  }
+  const profiles = await queryProfilesByIds(friendIds);
+  socialDebug('getFriendsList:profiles-loaded', {
+    userId,
+    friendIds,
+    profileIds: profiles.map((profile) => profile.id),
+  });
+  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  const mapped = friendIds.map((friendId) => {
+    const existing = byId.get(friendId);
+    if (existing) return existing;
+    socialDebug('getFriendsList:profile-missing-fallback', { userId, friendId });
+    return {
+      id: friendId,
+      username: `usuario-${friendId.slice(0, 6)}`,
+      display_name: 'Amigo/a',
+      avatar_url: null,
+    } as FriendProfile;
+  });
+  socialDebug('getFriendsList:resolved', {
+    userId,
+    count: mapped.length,
+    ids: mapped.map((friend) => friend.id),
+    names: mapped.map((friend) => friend.display_name || friend.username),
+  });
+  return mapped;
 }
 
 export async function getFriendLibrary(friendId: string): Promise<TrackedItem[]> {
@@ -666,7 +845,10 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
   if (!userId) return {};
 
   const friendIds = await getAcceptedFriendIds(userId);
-  if (friendIds.length === 0) return {};
+  if (friendIds.length === 0) {
+    socialDebug('getFriendsCompatibility:no-friends', { userId });
+    return {};
+  }
 
   const [ownItemsRes, friendsItemsRes] = await Promise.all([
     supabase
@@ -682,8 +864,21 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
   if (ownItemsRes.error || friendsItemsRes.error) {
     if (ownItemsRes.error) console.warn('[social] getFriendsCompatibility own items failed:', ownItemsRes.error.message);
     if (friendsItemsRes.error) console.warn('[social] getFriendsCompatibility friend items failed:', friendsItemsRes.error.message);
+    socialDebug('getFriendsCompatibility:error', {
+      userId,
+      friendIds,
+      ownError: ownItemsRes.error?.message ?? null,
+      friendsError: friendsItemsRes.error?.message ?? null,
+    });
     return {};
   }
+
+  socialDebug('getFriendsCompatibility:data-loaded', {
+    userId,
+    friendIds,
+    ownItemsCount: ownItemsRes.data?.length ?? 0,
+    friendsItemsCount: friendsItemsRes.data?.length ?? 0,
+  });
 
   const ownByKey = new Map<
     string,
@@ -766,6 +961,16 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
       sharedItems,
       sharedRatedItems,
     };
+  });
+
+  socialDebug('getFriendsCompatibility:resolved', {
+    userId,
+    entries: Object.values(result).map((entry) => ({
+      friendId: entry.friendId,
+      compatibility: entry.compatibility,
+      sharedItems: entry.sharedItems,
+      sharedRatedItems: entry.sharedRatedItems,
+    })),
   });
 
   return result;

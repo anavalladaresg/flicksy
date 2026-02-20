@@ -36,6 +36,7 @@ const HOME_CARD_SNAP = HOME_CARD_WIDTH + HOME_CARD_GAP;
 const FRIEND_CARD_WIDTH = 186;
 const FRIEND_CARD_GAP = 10;
 const FRIEND_CARD_SNAP = FRIEND_CARD_WIDTH + FRIEND_CARD_GAP;
+const WEB_TOP_TABS_OFFSET = 72;
 
 type CardItem = { id: number; name: string; imageUrl: string | null; rating?: number };
 type RecommendationItem = CardItem & {
@@ -992,6 +993,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1160,
     alignSelf: 'center',
+    paddingTop: WEB_TOP_TABS_OFFSET,
   },
   centered: {
     flex: 1,

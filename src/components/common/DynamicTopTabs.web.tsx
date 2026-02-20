@@ -215,12 +215,15 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 6,
     alignItems: 'center',
-    position: 'relative',
-    zIndex: 10,
+    zIndex: 120,
   },
   wrapperCompact: {
     paddingHorizontal: 8,
