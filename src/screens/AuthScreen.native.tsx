@@ -20,7 +20,6 @@ type EmailMode = 'signin' | 'signup' | null;
 
 export default function AuthScreen() {
   const isDark = useColorScheme() === 'dark';
-  const setUsername = usePreferencesStore((state: any) => state.setUsername);
   const { startSSOFlow } = useSSO();
   const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
@@ -56,9 +55,8 @@ export default function AuthScreen() {
       'Usuario';
 
     syncedUserRef.current = user.id;
-    setUsername(preferredName);
     void syncOwnProfile(preferredName);
-  }, [isSignedIn, setUsername, user]);
+  }, [isSignedIn, user]);
 
   const resetEmailFlow = useCallback(() => {
     setCode('');

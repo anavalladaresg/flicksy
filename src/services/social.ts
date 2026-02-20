@@ -139,7 +139,11 @@ async function getAcceptedFriendIds(userId: string): Promise<string[]> {
 
 export async function syncOwnProfile(
   username: string,
-  options?: { displayName?: string; fallbackAvatarUrl?: string | null }
+  options?: {
+    displayName?: string;
+    fallbackAvatarUrl?: string | null;
+    overwriteUsername?: boolean;
+  }
 ): Promise<void> {
   if (!supabase) return;
   const userId = await getCurrentUserId();
@@ -147,25 +151,28 @@ export async function syncOwnProfile(
   const normalized = normalizeUsername(username);
   if (!normalized) return;
 
+  const currentProfileRes = await supabase
+    .from('profiles')
+    .select('username,avatar_url')
+    .eq('id', userId)
+    .maybeSingle();
+
   const supportsAvatar = await hasProfilesAvatarColumn();
   let avatarToKeep: string | null = null;
-  if (supportsAvatar) {
-    const currentProfileRes = await supabase
-      .from('profiles')
-      .select('avatar_url')
-      .eq('id', userId)
-      .maybeSingle();
-    if (currentProfileRes.error && isMissingAvatarColumnError(currentProfileRes.error)) {
-      profilesAvatarColumnSupported = false;
-    } else {
-      const currentAvatar = (currentProfileRes.data as any)?.avatar_url ?? null;
-      avatarToKeep = currentAvatar || options?.fallbackAvatarUrl || null;
-    }
+  if (supportsAvatar && currentProfileRes.error && isMissingAvatarColumnError(currentProfileRes.error)) {
+    profilesAvatarColumnSupported = false;
+  } else {
+    const currentAvatar = (currentProfileRes.data as any)?.avatar_url ?? null;
+    avatarToKeep = currentAvatar || options?.fallbackAvatarUrl || null;
   }
+
+  const existingUsername = normalizeUsername((currentProfileRes.data as any)?.username ?? '');
+  const usernameToPersist =
+    options?.overwriteUsername || !existingUsername ? normalized : existingUsername;
 
   const basePayload: any = {
     id: userId,
-    username: normalized,
+    username: usernameToPersist,
     display_name: options?.displayName?.trim() || username.trim(),
     updated_at: new Date().toISOString(),
   };

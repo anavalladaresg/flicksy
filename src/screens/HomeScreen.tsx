@@ -849,6 +849,7 @@ function HomeScreen() {
           <Animated.View
             style={[
               styles.heroGlowA,
+              isWeb && styles.heroGlowAWebAligned,
               {
                 opacity: glowPulse.interpolate({
                   inputRange: [0, 1],
@@ -885,7 +886,7 @@ function HomeScreen() {
             ]}
           />
           <View style={[styles.heroPill, isDark && styles.heroPillDark]}>
-            <Text style={[styles.heroPillText, { color: isDark ? '#7DD3FC' : '#0E7490' }]}>Flicksy Picks</Text>
+            {isWeb ? <Image source={{ uri: '/icon-192.png' }} style={styles.heroPillLogo} resizeMode="contain" /> : null}
           </View>
           <Text style={[styles.heroTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Flicksy</Text>
           <Text style={[styles.heroSubtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>Lo más popular del catálogo mundial</Text>
@@ -988,7 +989,7 @@ const styles = StyleSheet.create({
   },
   scrollContentWeb: {
     width: '100%',
-    maxWidth: 1240,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   centered: {
@@ -1024,6 +1025,10 @@ const styles = StyleSheet.create({
     top: -40,
     right: -20,
   },
+  heroGlowAWebAligned: {
+    top: -47,
+    right: -40,
+  },
   heroGlowB: {
     position: 'absolute',
     width: 110,
@@ -1034,24 +1039,26 @@ const styles = StyleSheet.create({
     left: -20,
   },
   heroPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderColor: 'rgba(14,116,144,0.25)',
-    borderWidth: 1,
+    position: 'absolute',
+    top: 14,
+    right: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 10,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    zIndex: 2,
   },
   heroPillDark: {
     backgroundColor: 'rgba(15,23,42,0.7)',
     borderColor: 'rgba(125,211,252,0.3)',
   },
-  heroPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  heroPillLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   heroTitle: {
     fontSize: 36,
@@ -1094,6 +1101,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginHorizontal: 16,
     paddingHorizontal: 16,
     marginTop: 14,
     marginBottom: 8,

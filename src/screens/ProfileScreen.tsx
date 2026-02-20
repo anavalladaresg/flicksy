@@ -127,6 +127,19 @@ function previousPeriodDate(period: 'weekly' | 'monthly', from = new Date()): Da
 
 const PROFILE_DETAILS_LIMIT_WEB = 6;
 const PROFILE_DETAILS_LIMIT_NATIVE = 12;
+const PROFILE_SAVE_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function ProfileScreen() {
   const isDark = useColorScheme() === 'dark';
@@ -385,9 +398,8 @@ function ProfileScreen() {
   );
 
   useEffect(() => {
-    setUsername(computedUsername);
     void syncOwnProfile(computedUsername, { displayName, fallbackAvatarUrl: googleAccountImage });
-  }, [computedUsername, displayName, googleAccountImage, setUsername]);
+  }, [computedUsername, displayName, googleAccountImage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -415,6 +427,11 @@ function ProfileScreen() {
         }
 
         const remoteAvatar = ownProfile?.avatar_url ?? null;
+        const remoteUsername = ownProfile?.username?.trim() ?? '';
+        if (remoteUsername) {
+          setUsername(remoteUsername);
+          if (!isEditNameOpen) setNameDraft(remoteUsername);
+        }
         if (remoteAvatar) {
           setProfileAvatarUrl(remoteAvatar);
           setStoredProfileAvatarUrl(remoteAvatar);
@@ -427,7 +444,7 @@ function ProfileScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [setStoredProfileAvatarUrl]);
+  }, [isEditNameOpen, setStoredProfileAvatarUrl, setUsername]);
 
   useEffect(() => {
     const now = new Date();
@@ -491,20 +508,33 @@ function ProfileScreen() {
     const next = nameDraft.trim();
     if (!next) return;
     setNameSaving(true);
-    showLoader({ text: 'Guardando perfil...', overlay: true, fullScreen: true, blur: true });
     try {
-      const availability = await isUsernameAvailable(next);
+      const availability = await withTimeout(
+        isUsernameAvailable(next),
+        PROFILE_SAVE_TIMEOUT_MS,
+        'La comprobación tardó demasiado. Inténtalo otra vez.'
+      );
       if (!availability.available) {
         setFriendMessage(availability.message || 'Nombre de usuario no disponible.');
         return;
       }
       setUsername(next);
-      await syncOwnProfile(next, { displayName: next, fallbackAvatarUrl: googleAccountImage });
+      await withTimeout(
+        syncOwnProfile(next, {
+          displayName: next,
+          fallbackAvatarUrl: googleAccountImage,
+          overwriteUsername: true,
+        }),
+        PROFILE_SAVE_TIMEOUT_MS,
+        'No se pudo guardar el perfil a tiempo. Reintenta.'
+      );
       // Este cliente puede estar configurado con accessToken y no soporta auth.updateUser.
       // Guardamos username en perfil remoto + estado local, que es lo que usa la app.
       setIsEditNameOpen(false);
+      setFriendMessage('Nombre actualizado.');
+    } catch (error: any) {
+      setFriendMessage(error?.message || 'No se pudo guardar el nombre ahora.');
     } finally {
-      hideLoader();
       setNameSaving(false);
     }
   }
@@ -1039,7 +1069,7 @@ const styles = StyleSheet.create({
   },
   contentWeb: {
     width: '100%',
-    maxWidth: 1180,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   contentWebMobile: {

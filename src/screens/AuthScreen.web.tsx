@@ -3,8 +3,10 @@ import { Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity,
 import { SignIn, SignUp } from '@clerk/clerk-expo/web';
 import GridMotionBackground from '@/src/components/common/GridMotionBackground.web';
 import { clerkEsLocalization } from '@/src/services/clerk-localization';
+import { Fonts } from '@/constants/theme';
 
 type AuthMode = 'login' | 'register';
+const APP_WEB_FONT_FAMILY = Fonts.web?.sans || 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 export default function AuthScreenWeb() {
   // Forzar modo oscuro para el auth
@@ -20,7 +22,7 @@ export default function AuthScreenWeb() {
       colorInputBackground: '#111827',
       colorInputText: '#E5E7EB',
       borderRadius: '12px',
-      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontFamily: APP_WEB_FONT_FAMILY,
       fontSize: '14px',
     },
     elements: {
@@ -38,20 +40,20 @@ export default function AuthScreenWeb() {
       },
       headerTitle: {
         color: '#E5E7EB',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontSize: '24px',
         fontWeight: '700',
       },
       headerSubtitle: {
         color: '#CBD5E1',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontSize: '13px',
         lineHeight: '18px',
       },
       formButtonPrimary: {
         backgroundColor: '#0E7490',
         color: '#FFFFFF',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontSize: '15px',
         fontWeight: '700',
         borderRadius: '10px',
@@ -63,7 +65,7 @@ export default function AuthScreenWeb() {
         backgroundColor: '#0B1220',
         borderColor: '#1F2937',
         color: '#E5E7EB',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontSize: '16px',
         borderRadius: '10px',
         '&:focus': {
@@ -72,13 +74,13 @@ export default function AuthScreenWeb() {
       },
       formFieldLabel: {
         color: '#CBD5E1',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontSize: '14px',
         fontWeight: '600',
       },
       footerActionLink: {
         color: '#7DD3FC',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         fontWeight: '600',
         '&:hover': {
           color: '#BAE6FD',
@@ -88,7 +90,7 @@ export default function AuthScreenWeb() {
         backgroundColor: '#1F2937',
         borderColor: '#334155',
         color: '#E5E7EB',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
         borderRadius: '10px',
         '&:hover': {
           backgroundColor: '#374151',
@@ -99,7 +101,7 @@ export default function AuthScreenWeb() {
       },
       dividerText: {
         color: '#94A3B8',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontFamily: APP_WEB_FONT_FAMILY,
       },
       footer: {
         display: 'none',
@@ -182,7 +184,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: APP_WEB_FONT_FAMILY,
   },
   toggleRow: {
     width: '100%',
@@ -212,7 +214,7 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontWeight: '700',
     fontSize: 14,
-    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    fontFamily: APP_WEB_FONT_FAMILY,
   },
   toggleTextActive: {
     color: '#FFFFFF',

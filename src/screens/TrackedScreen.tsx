@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   topSectionWeb: {
-    maxWidth: 1040,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   header: {
@@ -893,7 +893,7 @@ const styles = StyleSheet.create({
   },
   listWeb: {
     width: '100%',
-    maxWidth: 1040,
+    maxWidth: 1160,
     alignSelf: 'center',
   },
   statusSeparator: {
