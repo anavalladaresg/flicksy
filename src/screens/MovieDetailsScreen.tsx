@@ -10,6 +10,7 @@ import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
     Image,
     Linking,
+    Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -53,6 +54,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   route,
   navigation,
 }) => {
+  const RootContainer = Platform.OS === 'web' ? View : SafeAreaView;
   const isDark = useColorScheme() === 'dark';
   const { movieId, fromFriendId, fromFriendName } = route.params;
   const { data: movie, isLoading, isError, refetch } = useMovieDetails(movieId);
@@ -131,6 +133,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const trailerVideo = movie?.videos?.results?.find(
     (video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser')
   );
+  const synopsisText = movie?.overview?.trim() || 'Sinopsis no disponible en español por ahora.';
   const streaming = useMemo(() => getStreamingProviders(movie), [movie]);
   const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
 
@@ -194,36 +197,36 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <CenteredOverlay>
           <MagicLoader size={54} text="Cargando detalles..." />
         </CenteredOverlay>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <ErrorMessage
           message="No se pudo cargar los detalles de la película"
           onRetry={() => refetch()}
         />
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (!movie) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <Text>Película no encontrada</Text>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#fff' }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <RootContainer style={[styles.container, isDark && styles.containerDark]}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -377,7 +380,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
           <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Sinopsis</Text>
           <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-            <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{movie.overview}</Text>
+            <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{synopsisText}</Text>
           </View>
 
         </View>
@@ -409,7 +412,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
           navigation.goBack();
         }}
       />
-    </SafeAreaView>
+    </RootContainer>
   );
 };
 
@@ -418,8 +421,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  containerDark: {
+    backgroundColor: '#111827',
+  },
   scrollContent: {
     paddingBottom: 26,
+  },
+  scrollView: {
+    ...(Platform.OS === 'web' ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any) : {}),
   },
   header: {
     position: 'absolute',

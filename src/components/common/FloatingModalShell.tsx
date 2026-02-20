@@ -17,7 +17,7 @@ export default function FloatingModalShell({ children, onClose, maxWidth = 1024 
     <View style={styles.overlay}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       <View style={styles.aura} />
-      <View style={[styles.sheet, { maxWidth }]}>
+      <View style={[styles.sheet, { maxWidth }]} testID="floating-modal-sheet">
         <View style={styles.innerFrame}>{children}</View>
       </View>
     </View>
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     height: '92%',
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#020617',
+    backgroundColor: '#0F172A',
     borderWidth: 1,
     borderColor: 'rgba(125, 211, 252, 0.28)',
     shadowColor: '#000000',
@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: '#0B1220',
+    backgroundColor: '#111827',
   },
 });

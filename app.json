@@ -4,7 +4,7 @@
     "slug": "flicksy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./public/icon-512.png",
     "scheme": "flicksy",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,

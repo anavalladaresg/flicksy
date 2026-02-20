@@ -191,6 +191,7 @@ function ProfileScreen() {
   const [sentFriendRequestIds, setSentFriendRequestIds] = useState<Record<string, true>>({});
   const [sendingFriendRequestIds, setSendingFriendRequestIds] = useState<Record<string, true>>({});
   const friendRequestInFlightRef = useRef<Record<string, true>>({});
+  const pendingUsernameSyncRef = useRef<string | null>(null);
   const [compatibilityByFriendId, setCompatibilityByFriendId] = useState<Record<string, { compatibility: number; sharedItems: number }>>({});
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
@@ -427,10 +428,14 @@ function ProfileScreen() {
         }
 
         const remoteAvatar = ownProfile?.avatar_url ?? null;
-        const remoteUsername = ownProfile?.username?.trim() ?? '';
+        const remoteUsername = ownProfile?.username?.trim().toLowerCase() ?? '';
+        const pendingUsername = pendingUsernameSyncRef.current;
         if (remoteUsername) {
-          setUsername(remoteUsername);
-          if (!isEditNameOpen) setNameDraft(remoteUsername);
+          if (!pendingUsername || remoteUsername === pendingUsername) {
+            if (remoteUsername !== username) setUsername(remoteUsername);
+            if (!isEditNameOpen && !nameSaving) setNameDraft(remoteUsername);
+            if (pendingUsername && remoteUsername === pendingUsername) pendingUsernameSyncRef.current = null;
+          }
         }
         if (remoteAvatar) {
           setProfileAvatarUrl(remoteAvatar);
@@ -444,7 +449,7 @@ function ProfileScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isEditNameOpen, setStoredProfileAvatarUrl, setUsername]);
+  }, [isEditNameOpen, nameSaving, setStoredProfileAvatarUrl, setUsername, username]);
 
   useEffect(() => {
     const now = new Date();
@@ -507,6 +512,7 @@ function ProfileScreen() {
   async function handleSaveUsername() {
     const next = nameDraft.trim();
     if (!next) return;
+    const normalizedNext = next.toLowerCase();
     setNameSaving(true);
     try {
       const availability = await withTimeout(
@@ -518,7 +524,9 @@ function ProfileScreen() {
         setFriendMessage(availability.message || 'Nombre de usuario no disponible.');
         return;
       }
-      setUsername(next);
+      pendingUsernameSyncRef.current = normalizedNext;
+      setUsername(normalizedNext);
+      setNameDraft(normalizedNext);
       await withTimeout(
         syncOwnProfile(next, {
           displayName: next,
@@ -700,7 +708,7 @@ function ProfileScreen() {
             <>
               <View style={[styles.heroGlowLarge, isDark && styles.heroGlowLargeDark]} />
               <View style={[styles.heroGlowSmall, isDark && styles.heroGlowSmallDark]} />
-              <Text style={[styles.heroEyebrow, { color: isDark ? '#7DD3FC' : '#0E7490' }]}>PROFILE HUB</Text>
+              <Text style={[styles.heroEyebrow, { color: isDark ? '#7DD3FC' : '#0E7490' }]}>CENTRO DE PERFIL</Text>
             </>
           ) : null}
           <View style={[styles.profileTopRow, isCompactProfile && styles.profileTopRowCompact]}>
@@ -791,7 +799,7 @@ function ProfileScreen() {
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark, useWebBento && styles.bentoCard, useWebBento && styles.bentoTwoThird, useWebBento && styles.bentoTall]}>
-          <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Dashboard</Text>
+          <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
           <View style={styles.statsRow}>
             <Text style={[styles.statLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Horas estimadas</Text>
             <Text style={[styles.statValue, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{Math.round(estimatedHours)} h</Text>

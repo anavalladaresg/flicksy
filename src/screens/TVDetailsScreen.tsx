@@ -10,6 +10,7 @@ import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
     Image,
     Linking,
+    Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -53,6 +54,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   route,
   navigation,
 }) => {
+  const RootContainer = Platform.OS === 'web' ? View : SafeAreaView;
   const isDark = useColorScheme() === 'dark';
   const { tvId, fromFriendId, fromFriendName } = route.params;
   const { data: show, isLoading, isError, refetch } = useTVShowDetails(tvId);
@@ -135,6 +137,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const trailerVideo = show?.videos?.results?.find(
     (video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser')
   );
+  const synopsisText = show?.overview?.trim() || 'Sinopsis no disponible en español por ahora.';
   const streaming = useMemo(() => getStreamingProviders(show), [show]);
   const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
 
@@ -201,36 +204,36 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <CenteredOverlay>
           <MagicLoader size={54} text="Cargando detalles..." />
         </CenteredOverlay>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <ErrorMessage
           message="No se pudo cargar los detalles de la serie"
           onRetry={() => refetch()}
         />
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (!show) {
     return (
-      <SafeAreaView style={styles.container}>
+      <RootContainer style={styles.container}>
         <Text>Serie no encontrada</Text>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#fff' }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <RootContainer style={[styles.container, isDark && styles.containerDark]}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -388,7 +391,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
 
           <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Sinopsis</Text>
           <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-            <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{show.overview}</Text>
+            <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{synopsisText}</Text>
           </View>
 
         </View>
@@ -420,7 +423,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
           navigation.goBack();
         }}
       />
-    </SafeAreaView>
+    </RootContainer>
   );
 };
 
@@ -429,8 +432,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  containerDark: {
+    backgroundColor: '#111827',
+  },
   scrollContent: {
     paddingBottom: 26,
+  },
+  scrollView: {
+    ...(Platform.OS === 'web' ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any) : {}),
   },
   header: {
     position: 'absolute',

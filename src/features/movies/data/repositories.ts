@@ -8,6 +8,8 @@ import { tmdbHttp } from '../../../services/http';
 import { Movie, PaginatedResponse, SearchParams } from '../../../types';
 import { IMovieRepository, MovieSortOption, Period } from '../domain/repositories';
 
+const SPANISH_LANGUAGE = 'es-ES';
+
 function getDateRange(period: Period): { start: string; end: string } {
   const end = new Date();
   const start = new Date();
@@ -23,7 +25,7 @@ export class MovieRepository implements IMovieRepository {
   async getPopularMovies(page: number = 1): Promise<PaginatedResponse<Movie>> {
     try {
       const response = await tmdbHttp.get('/movie/popular', {
-        params: { page },
+        params: { page, language: SPANISH_LANGUAGE },
       });
       
       return {
@@ -43,6 +45,7 @@ export class MovieRepository implements IMovieRepository {
         params: {
           query: params.query,
           page: params.page || 1,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -69,6 +72,7 @@ export class MovieRepository implements IMovieRepository {
           include_adult: false,
           include_video: false,
           vote_count_gte: sortBy === 'vote_average.desc' ? 150 : 20,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -95,6 +99,7 @@ export class MovieRepository implements IMovieRepository {
           include_adult: false,
           include_video: false,
           vote_count_gte: 10,
+          language: SPANISH_LANGUAGE,
         },
       });
 
@@ -114,7 +119,7 @@ export class MovieRepository implements IMovieRepository {
       let response;
       if (period === 'week') {
         response = await tmdbHttp.get('/trending/movie/week', {
-          params: { page: 1 },
+          params: { page: 1, language: SPANISH_LANGUAGE },
         });
       } else {
         const { start, end } = getDateRange(period);
@@ -127,6 +132,7 @@ export class MovieRepository implements IMovieRepository {
             include_adult: false,
             include_video: false,
             vote_count_gte: 50,
+            language: SPANISH_LANGUAGE,
           },
         });
       }
@@ -147,6 +153,7 @@ export class MovieRepository implements IMovieRepository {
       const response = await tmdbHttp.get(`/movie/${id}`, {
         params: {
           append_to_response: 'credits,videos,translations,watch/providers',
+          language: SPANISH_LANGUAGE,
         },
       });
 
