@@ -633,6 +633,7 @@ function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isWeb = Platform.OS === 'web';
+  const RootContainer = isWeb ? View : SafeAreaView;
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
   const trackedItems = useTrackingStore((state) => state.items);
@@ -811,23 +812,23 @@ function HomeScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.centered, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+      <RootContainer style={[styles.centered, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
         <MagicLoader size={58} text="Cargando populares..." />
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   if (allFailed) {
     return (
-      <SafeAreaView style={[styles.centered, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+      <RootContainer style={[styles.centered, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
         <Text style={styles.errorTitle}>No pudimos cargar el contenido</Text>
         <Text style={styles.errorSubtitle}>Verifica tus claves de TMDB e IGDB y recarga la app.</Text>
-      </SafeAreaView>
+      </RootContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}> 
+    <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}> 
       <ScrollView contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb]}>
         <Animated.View
           style={[
@@ -976,7 +977,7 @@ function HomeScreen() {
           <SectionRow title="Juegos más jugados" type="game" items={games} dark={isDark} />
         )}
       </ScrollView>
-    </SafeAreaView>
+    </RootContainer>
   );
 }
 

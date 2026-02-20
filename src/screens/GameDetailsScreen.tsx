@@ -47,7 +47,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'playing' | 'completed'>('playing');
+  const [status, setStatus] = useState<'planned' | 'playing' | 'completed'>('completed');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
   const [startedAtApproximate, setStartedAtApproximate] = useState(false);
@@ -200,7 +200,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
     if (!trackedGameItem) return;
     setRating(trackedGameItem.rating ?? 0);
     setStatus(
-      (trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing'
+      (trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'completed'
     );
     setStartedAt(trackedGameItem.startedAt ?? '');
     setFinishedAt(trackedGameItem.finishedAt ?? '');
@@ -274,7 +274,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
                   return;
                 }
                 setRating(0);
-                setStatus('playing');
+                setStatus('completed');
                 setStartedAt('');
                 setFinishedAt('');
                 setStartedAtApproximate(false);

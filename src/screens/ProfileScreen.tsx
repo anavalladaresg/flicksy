@@ -167,6 +167,7 @@ function ProfileScreen() {
   const trackedItems = useTrackingStore((state) => state.items);
   const darkEnabled = themeMode === 'dark';
   const isWeb = Platform.OS === 'web';
+  const RootContainer = isWeb ? View : SafeAreaView;
   const { width: windowWidth } = useWindowDimensions();
   const useWebBento = isWeb && windowWidth >= 920;
   const isCompactProfile = windowWidth < 640;
@@ -178,6 +179,7 @@ function ProfileScreen() {
   const [nameSaving, setNameSaving] = useState(false);
   const [isEditAvatarOpen, setIsEditAvatarOpen] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarOptions, setAvatarOptions] = useState<AvatarOption[]>([]);
   const [avatarSearchQuery, setAvatarSearchQuery] = useState('');
   const [avatarSearchLoading, setAvatarSearchLoading] = useState(false);
@@ -635,9 +637,14 @@ function ProfileScreen() {
     setAvatarSearchLoading(true);
     const timeout = setTimeout(() => {
       void (async () => {
-        const results = await searchAvatarOptions(cleaned);
-        if (!cancelled) setAvatarSearchOptions(results);
-        if (!cancelled) setAvatarSearchLoading(false);
+        try {
+          const results = await searchAvatarOptions(cleaned);
+          if (!cancelled) setAvatarSearchOptions(results);
+        } catch {
+          if (!cancelled) setAvatarSearchOptions([]);
+        } finally {
+          if (!cancelled) setAvatarSearchLoading(false);
+        }
       })();
     }, 280);
 
@@ -648,12 +655,18 @@ function ProfileScreen() {
   }, [avatarSearchQuery, isEditAvatarOpen]);
 
   async function handleSelectAvatar(nextAvatarUrl: string | null) {
+    if (avatarSaving) return;
+    setAvatarSaving(true);
     showLoader({ text: 'Guardando avatar...', overlay: true, fullScreen: true, blur: true });
     try {
       const previous = profileAvatarUrl;
       setProfileAvatarUrl(nextAvatarUrl);
       setStoredProfileAvatarUrl(nextAvatarUrl);
-      const result = await updateOwnAvatar(nextAvatarUrl);
+      const result = await withTimeout(
+        updateOwnAvatar(nextAvatarUrl),
+        PROFILE_SAVE_TIMEOUT_MS,
+        'La actualización del avatar tardó demasiado. Reintenta.'
+      );
       if (result.ok) {
         setFriendMessage(result.message);
         setIsEditAvatarOpen(false);
@@ -667,7 +680,10 @@ function ProfileScreen() {
       setProfileAvatarUrl(previous);
       setStoredProfileAvatarUrl(previous);
       setFriendMessage(result.message);
+    } catch (error: any) {
+      setFriendMessage(error?.message || 'No se pudo guardar la foto de perfil ahora.');
     } finally {
+      setAvatarSaving(false);
       hideLoader();
     }
   }
@@ -693,7 +709,7 @@ function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+    <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -722,18 +738,9 @@ function ProfileScreen() {
             <View style={[styles.profileMainInfo, isCompactProfile && styles.profileMainInfoCompact]}>
               <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
               <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
-              <View style={styles.usernameRow}>
-                <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
-                <TouchableOpacity
-                  style={[styles.usernameEditBtn, isDark && styles.usernameEditBtnDark]}
-                  onPress={() => {
-                    setNameDraft(computedUsername);
-                    setIsEditNameOpen(true);
-                  }}
-                >
-                  <MaterialIcons name="edit" size={13} color={isDark ? '#BAE6FD' : '#0369A1'} />
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                {emailAddress || 'Sin correo asociado'}
+              </Text>
             </View>
             <View style={[styles.profileActionsColumn, isCompactProfile && styles.profileActionsColumnCompact]}>
               <TouchableOpacity
@@ -1057,7 +1064,7 @@ function ProfileScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </RootContainer>
   );
 }
 

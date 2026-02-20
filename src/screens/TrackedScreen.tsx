@@ -181,6 +181,7 @@ function RatingEditor({
 function TrackedScreen() {
   const isDark = useColorScheme() === 'dark';
   const isWeb = Platform.OS === 'web';
+  const RootContainer = isWeb ? View : SafeAreaView;
   const { width: windowWidth } = useWindowDimensions();
   const isWebMobile = isWeb && windowWidth < 920;
   const router = useRouter();
@@ -361,7 +362,7 @@ function TrackedScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+      <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
         <View style={[styles.topSection, isWeb && styles.topSectionWeb]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Biblioteca</Text>
@@ -699,7 +700,7 @@ function TrackedScreen() {
             </View>
           </View>
         </Modal>
-      </SafeAreaView>
+      </RootContainer>
     </GestureHandlerRootView>
   );
 }
