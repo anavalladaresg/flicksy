@@ -1,10 +1,10 @@
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 type NotifyKind = 'success' | 'error' | 'warning' | 'info';
 
 export function showInAppNotification(kind: NotifyKind, title: string, description?: string) {
   if (Platform.OS !== 'web') {
-    Alert.alert(title, description);
+    // En móvil están deshabilitadas por requisito de producto.
     return;
   }
 
@@ -18,4 +18,3 @@ export async function requestWebNotificationPermission(): Promise<NotificationPe
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
   return Notification.requestPermission();
 }
-

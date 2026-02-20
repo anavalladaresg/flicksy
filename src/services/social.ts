@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { sendExpoPushNotification } from './notifications';
 import type { TrackedItem } from '../types';
 import { getClerkInstance } from '@clerk/clerk-expo';
 
@@ -334,15 +333,7 @@ export async function sendFriendRequestByUserId(toUserId: string): Promise<{ ok:
     return { ok: false, message: 'Ya existe una solicitud activa.' };
   }
 
-  const [senderProfileRes, recipientProfileRes] = await Promise.all([
-    supabase.from('profiles').select('username,display_name').eq('id', fromUserId).maybeSingle(),
-    supabase.from('profiles').select('*').eq('id', toUserId).maybeSingle(),
-  ]);
-
-  const senderName =
-    (senderProfileRes.data as any)?.display_name ||
-    (senderProfileRes.data as any)?.username ||
-    'Alguien';
+  const recipientProfileRes = await supabase.from('profiles').select('*').eq('id', toUserId).maybeSingle();
   const recipientName =
     (recipientProfileRes.data as any)?.display_name ||
     (recipientProfileRes.data as any)?.username ||
@@ -358,20 +349,32 @@ export async function sendFriendRequestByUserId(toUserId: string): Promise<{ ok:
     return { ok: false, message: 'No se pudo enviar la solicitud.' };
   }
 
-  const recipientToken = (recipientProfileRes.data as any)?.expo_push_token as string | undefined;
-  if (recipientToken) {
-    try {
-      await sendExpoPushNotification(
-        recipientToken,
-        'Nueva solicitud de amistad',
-        `${senderName} quiere ser tu amigo/a.`
-      );
-    } catch (pushError) {
-      console.warn('[social] push send failed:', pushError);
-    }
+  return { ok: true, message: `Solicitud enviada a ${recipientName}.` };
+}
+
+export async function getOutgoingFriendRequestIds(): Promise<string[]> {
+  if (!supabase) return [];
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('friend_requests')
+    .select('to_user_id,status')
+    .eq('from_user_id', userId)
+    .in('status', ['pending', 'accepted']);
+
+  if (error) {
+    console.warn('[social] getOutgoingFriendRequestIds failed:', error.message);
+    return [];
   }
 
-  return { ok: true, message: `Solicitud enviada a ${recipientName}.` };
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row: any) => row.to_user_id as string | undefined)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
 }
 
 export async function getIncomingFriendRequests(): Promise<FriendRequestItem[]> {

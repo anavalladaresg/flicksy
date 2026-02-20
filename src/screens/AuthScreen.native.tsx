@@ -1,9 +1,9 @@
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import MagicLoader from '@/components/loaders/MagicLoader';
 import { useAuth, useSSO, useSignIn, useSignUp, useUser } from '@clerk/clerk-expo';
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { syncOwnProfile } from '../services/social';
 import { usePreferencesStore } from '../store/preferences';
+import { useGlobalLoader } from '../hooks/useGlobalLoader';
 
 type EmailMode = 'signin' | 'signup' | null;
 
@@ -25,6 +26,7 @@ export default function AuthScreen() {
   const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
   const { isSignedIn } = useAuth();
   const { user } = useUser();
+  const { showLoader, hideLoader } = useGlobalLoader();
 
   const [emailMode, setEmailMode] = useState<EmailMode>(null);
   const [emailAddress, setEmailAddress] = useState('');
@@ -85,6 +87,7 @@ export default function AuthScreen() {
       setError('');
       setInfo('');
       setSocialLoading('google');
+      showLoader({ text: 'Conectando cuenta...', overlay: true, fullScreen: true, blur: true });
       try {
         const { createdSessionId, setActive } = await startSSOFlow({ strategy });
         if (createdSessionId && setActive) {
@@ -96,10 +99,11 @@ export default function AuthScreen() {
         const message = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || 'No se pudo iniciar sesión social.';
         setError(message);
       } finally {
+        hideLoader();
         setSocialLoading(null);
       }
     },
-    [startSSOFlow]
+    [hideLoader, showLoader, startSSOFlow]
   );
 
   const handleEmailSubmit = useCallback(async () => {
@@ -120,6 +124,7 @@ export default function AuthScreen() {
     }
 
     setLoading(true);
+    showLoader({ text: emailMode === 'signin' ? 'Iniciando sesión...' : 'Creando cuenta...', overlay: true, fullScreen: true, blur: true });
     try {
       if (emailMode === 'signin') {
         const signInAttempt = await signIn.create({
@@ -163,9 +168,10 @@ export default function AuthScreen() {
       const message = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || 'No se pudo completar la acción.';
       setError(message);
     } finally {
+      hideLoader();
       setLoading(false);
     }
-  }, [emailAddress, emailMode, isLoaded, password, setActiveSignIn, signIn, signUp]);
+  }, [emailAddress, emailMode, hideLoader, isLoaded, password, setActiveSignIn, showLoader, signIn, signUp]);
 
   const handleVerify = useCallback(async () => {
     setError('');
@@ -177,6 +183,7 @@ export default function AuthScreen() {
     }
 
     setLoading(true);
+    showLoader({ text: 'Verificando código...', overlay: true, fullScreen: true, blur: true });
     try {
       if (pendingVerification) {
         const attempt = await signUp.attemptEmailAddressVerification({ code: code.trim() });
@@ -204,9 +211,10 @@ export default function AuthScreen() {
       const message = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || 'Código no válido.';
       setError(message);
     } finally {
+      hideLoader();
       setLoading(false);
     }
-  }, [code, isLoaded, pendingSecondFactor, pendingVerification, setActiveSignIn, setActiveSignUp, signIn, signUp]);
+  }, [code, hideLoader, isLoaded, pendingSecondFactor, pendingVerification, setActiveSignIn, setActiveSignUp, showLoader, signIn, signUp]);
 
   const showCodeInput = pendingVerification || pendingSecondFactor;
   const emailTitle = useMemo(() => {
@@ -230,12 +238,16 @@ export default function AuthScreen() {
               <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Bienvenido de nuevo</Text>
 
               <TouchableOpacity
-                style={[styles.socialButton, styles.googleButton]}
+                style={[styles.socialButton, styles.googleButton, isDark && styles.googleButtonDark]}
                 onPress={() => void handleSocialLogin('oauth_google')}
                 disabled={socialLoading !== null}
               >
-                {socialLoading === 'google' ? <ActivityIndicator color="#0F172A" size="small" /> : <MaterialIcons name="g-translate" size={20} color="#0F172A" />}
-                <Text style={styles.googleButtonText}>Seguir con Google</Text>
+                {socialLoading === 'google' ? (
+                  <MagicLoader size={20} color={isDark ? '#E5E7EB' : '#0F172A'} secondaryColor={isDark ? '#BAE6FD' : '#67E8F9'} />
+                ) : (
+                  <MaterialIcons name="g-translate" size={20} color={isDark ? '#E5E7EB' : '#0F172A'} />
+                )}
+                <Text style={[styles.googleButtonText, isDark && styles.googleButtonTextDark]}>Seguir con Google</Text>
               </TouchableOpacity>
 
               <View style={styles.separatorRow}>
@@ -248,8 +260,8 @@ export default function AuthScreen() {
                 <TouchableOpacity style={styles.primaryButton} onPress={() => startEmailMode('signin')}>
                   <Text style={styles.primaryButtonText}>Entrar con email</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => startEmailMode('signup')}>
-                  <Text style={styles.secondaryButtonText}>Crear cuenta gratis</Text>
+                <TouchableOpacity style={[styles.secondaryButton, isDark && styles.secondaryButtonDark]} onPress={() => startEmailMode('signup')}>
+                  <Text style={[styles.secondaryButtonText, isDark && styles.secondaryButtonTextDark]}>Crear cuenta gratis</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -300,7 +312,7 @@ export default function AuthScreen() {
                 onPress={showCodeInput ? handleVerify : handleEmailSubmit}
               >
                 {loading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <MagicLoader size={18} color="#FFFFFF" secondaryColor="#BAE6FD" />
                 ) : (
                   <Text style={styles.primaryButtonText}>{showCodeInput ? 'Verificar código' : emailMode === 'signin' ? 'Iniciar sesión' : 'Continuar'}</Text>
                 )}
@@ -374,10 +386,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
+  googleButtonDark: {
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
+  },
   googleButtonText: {
     color: '#0F172A',
     fontSize: 15,
     fontWeight: '700',
+  },
+  googleButtonTextDark: {
+    color: '#E5E7EB',
   },
   separatorRow: {
     flexDirection: 'row',
@@ -417,10 +436,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  secondaryButtonDark: {
+    borderColor: '#22D3EE',
+    backgroundColor: '#0F172A',
+  },
   secondaryButtonText: {
     color: '#0E7490',
     fontSize: 15,
     fontWeight: '700',
+  },
+  secondaryButtonTextDark: {
+    color: '#67E8F9',
   },
   input: {
     borderWidth: 1,

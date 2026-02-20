@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { CalendarInput } from './CalendarInput';
+import { useEscapeClose } from '../../hooks/use-escape-close';
 
 interface StatusOption {
   value: string;
@@ -81,6 +82,7 @@ function RatingPickerModal({
   const trackPageXRef = useRef(0);
   const valueRef = useRef(value);
   valueRef.current = value;
+  useEscapeClose(visible, onCancel);
 
   const measureTrack = useCallback(() => {
     starsTrackRef.current?.measureInWindow((x) => {

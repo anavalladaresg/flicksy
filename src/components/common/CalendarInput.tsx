@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useEscapeClose } from '../../hooks/use-escape-close';
 
 interface CalendarInputProps {
   label: string;
@@ -78,6 +79,7 @@ function CalendarInput({
   const isDark = useColorScheme() === 'dark';
   const [open, setOpen] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
+  useEscapeClose(open, () => setOpen(false));
   const initial = parseDate(mode === 'range' ? rangeStart || rangeEnd || value : value);
   const [cursor, setCursor] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
 

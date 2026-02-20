@@ -21,6 +21,7 @@ import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler'
 import { CalendarInput } from '../components/common/CalendarInput';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { gameRepository } from '../features/games/data/repositories';
+import { useEscapeClose } from '../hooks/use-escape-close';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
 import { formatDate, getMediaIcon, getStatusColor } from '../utils/helpers';
@@ -186,6 +187,7 @@ function TrackedScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
   const [isSortOpen, setIsSortOpen] = useState(false);
+  const [hoveredCardId, setHoveredCardId] = useState<string | number | null>(null);
   const sortButtonRef = useRef<View | null>(null);
   const [sortMenuPosition, setSortMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -198,6 +200,7 @@ function TrackedScreen() {
   const [editingWatchedAtApproximate, setEditingWatchedAtApproximate] = useState(false);
   const [editingStartedAtApproximate, setEditingStartedAtApproximate] = useState(false);
   const [editingFinishedAtApproximate, setEditingFinishedAtApproximate] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<TrackedItem | null>(null);
 
   const items = useTrackingStore((state) => state.items);
   const removeItem = useTrackingStore((state) => state.removeItem);
@@ -308,6 +311,21 @@ function TrackedScreen() {
 
   const isEditingPlanned = editingStatus === 'planned';
   const isEditingInProgress = editingStatus === 'watching' || editingStatus === 'playing';
+  const showInlineItemActions = isWeb && !isWebMobile;
+
+  useEscapeClose(isSortOpen, () => setIsSortOpen(false));
+  useEscapeClose(Boolean(editingItem), () => setEditingItem(null));
+  useEscapeClose(Boolean(pendingDeleteItem), () => setPendingDeleteItem(null));
+
+  function requestDelete(item: TrackedItem) {
+    setPendingDeleteItem(item);
+  }
+
+  function confirmDelete() {
+    if (!pendingDeleteItem) return;
+    removeItem(pendingDeleteItem.id);
+    setPendingDeleteItem(null);
+  }
 
   function renderDateSummary(item: TrackedItem) {
     if (item.mediaType === 'movie') {
@@ -353,26 +371,26 @@ function TrackedScreen() {
           <View style={styles.controls}>
             <View style={styles.filterBar}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-                <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-                  <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : '#334155'} />
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+                  <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
-                  <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : '#334155'} />
-                  <Text style={[styles.filterText, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
+                  <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+                  <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
                   <View style={styles.chipCounter}>
                     <Text style={styles.chipCounterText}>{counters.movie}</Text>
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
-                  <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : '#334155'} />
-                  <Text style={[styles.filterText, filter === 'tv' && styles.filterTextActive]}>Series</Text>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
+                  <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+                  <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'tv' && styles.filterTextActive]}>Series</Text>
                   <View style={styles.chipCounter}>
                     <Text style={styles.chipCounterText}>{counters.tv}</Text>
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
-                  <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : '#334155'} />
-                  <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
+                  <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+                  <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
                   <View style={styles.chipCounter}>
                     <Text style={styles.chipCounterText}>{counters.game}</Text>
                   </View>
@@ -380,12 +398,12 @@ function TrackedScreen() {
               </ScrollView>
 
               <View style={styles.sortAnchor} ref={sortButtonRef}>
-                <TouchableOpacity style={styles.sortButton} onPress={toggleSortMenu}>
-                  <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color="#0F172A" />
+                <TouchableOpacity style={[styles.sortButton, isDark && styles.sortButtonDark]} onPress={toggleSortMenu}>
+                  <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
                 </TouchableOpacity>
 
                 {isSortOpen && !isWeb && (
-                  <View style={styles.sortMenu}>
+                  <View style={[styles.sortMenu, isDark && styles.sortMenuDark]}>
                     {SORT_OPTIONS.map((option) => {
                       const active = sortBy === option.value;
                       return (
@@ -397,8 +415,8 @@ function TrackedScreen() {
                             setIsSortOpen(false);
                           }}
                         >
-                          <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
-                          <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
+                          <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : isDark ? '#CBD5E1' : '#334155'} />
+                          <Text style={[styles.sortMenuText, isDark && styles.sortMenuTextDark, active && styles.sortMenuTextActive]}>{option.label}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -412,7 +430,7 @@ function TrackedScreen() {
         {isWeb && isSortOpen && (
           <Modal visible transparent animationType="none" onRequestClose={() => setIsSortOpen(false)}>
             <Pressable style={styles.sortOverlay} onPress={() => setIsSortOpen(false)}>
-              <View style={[styles.sortMenu, styles.sortMenuFloating, { top: sortMenuPosition.top, left: sortMenuPosition.left }]}>
+              <View style={[styles.sortMenu, isDark && styles.sortMenuDark, styles.sortMenuFloating, { top: sortMenuPosition.top, left: sortMenuPosition.left }]}>
                 {SORT_OPTIONS.map((option) => {
                   const active = sortBy === option.value;
                   return (
@@ -424,8 +442,8 @@ function TrackedScreen() {
                         setIsSortOpen(false);
                       }}
                     >
-                      <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
-                      <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
+                      <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : isDark ? '#CBD5E1' : '#334155'} />
+                      <Text style={[styles.sortMenuText, isDark && styles.sortMenuTextDark, active && styles.sortMenuTextActive]}>{option.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -445,7 +463,22 @@ function TrackedScreen() {
               const previous = filtered[index - 1];
               const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
               const cardContent = (
-                <TouchableOpacity style={[styles.card, isDark && styles.cardDark]} activeOpacity={0.8} onPress={() => router.push(routeFromItem(item))}>
+                <TouchableOpacity
+                  style={[
+                    styles.card,
+                    isDark && styles.cardDark,
+                    isWeb && styles.cardWeb,
+                    isWeb && hoveredCardId === item.id && styles.cardWebHovered,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(routeFromItem(item))}
+                  {...(isWeb
+                    ? {
+                        onMouseEnter: () => setHoveredCardId(item.id),
+                        onMouseLeave: () => setHoveredCardId(null),
+                      }
+                    : {})}
+                >
                   <Image source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
 
                   <View style={styles.content}>
@@ -465,28 +498,30 @@ function TrackedScreen() {
 
                     <Text numberOfLines={1} style={[styles.dateSummary, { color: isDark ? '#94A3B8' : '#64748B' }]}>{renderDateSummary(item)}</Text>
 
-                    <View style={styles.itemActionsRow}>
-                      <TouchableOpacity
-                        style={[styles.itemActionBtn, styles.itemActionEdit]}
-                        onPress={(event: any) => {
-                          event?.stopPropagation?.();
-                          openEditor(item);
-                        }}
-                      >
-                        <MaterialIcons name="edit" size={14} color="#FFFFFF" />
-                        <Text style={styles.itemActionText}>Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.itemActionBtn, styles.itemActionDelete]}
-                        onPress={(event: any) => {
-                          event?.stopPropagation?.();
-                          removeItem(item.id);
-                        }}
-                      >
-                        <MaterialIcons name="delete" size={14} color="#FFFFFF" />
-                        <Text style={styles.itemActionText}>Eliminar</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {showInlineItemActions ? (
+                      <View style={styles.itemActionsRow}>
+                        <TouchableOpacity
+                          style={[styles.itemActionBtn, styles.itemActionEdit]}
+                          onPress={(event: any) => {
+                            event?.stopPropagation?.();
+                            openEditor(item);
+                          }}
+                        >
+                          <MaterialIcons name="edit" size={14} color="#FFFFFF" />
+                          <Text style={styles.itemActionText}>Editar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.itemActionBtn, styles.itemActionDelete]}
+                          onPress={(event: any) => {
+                            event?.stopPropagation?.();
+                            requestDelete(item);
+                          }}
+                        >
+                          <MaterialIcons name="delete" size={14} color="#FFFFFF" />
+                          <Text style={styles.itemActionText}>Eliminar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               );
@@ -512,7 +547,7 @@ function TrackedScreen() {
                       </TouchableOpacity>
                     )}
                     renderRightActions={() => (
-                      <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem(item.id)}>
+                      <TouchableOpacity style={styles.swipeDelete} onPress={() => requestDelete(item)}>
                         <MaterialIcons name="delete" size={22} color="#FFFFFF" />
                       </TouchableOpacity>
                     )}
@@ -646,6 +681,24 @@ function TrackedScreen() {
             </View>
           </View>
         </Modal>
+
+        <Modal visible={Boolean(pendingDeleteItem)} transparent animationType="fade" onRequestClose={() => setPendingDeleteItem(null)}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, isDark && styles.modalCardDark]}>
+              <Text style={[styles.modalTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Eliminar elemento</Text>
+              <Text style={[styles.modalItemTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>{pendingDeleteItem?.title}</Text>
+              <Text style={[styles.modalHint, { color: isDark ? '#94A3B8' : '#64748B' }]}>Esta acción no se puede deshacer.</Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => setPendingDeleteItem(null)}>
+                  <Text style={styles.modalCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalSave, styles.deleteConfirmBtn]} onPress={confirmDelete}>
+                  <Text style={styles.modalSaveText}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -708,6 +761,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  filterChipDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   filterChipActive: {
     backgroundColor: '#0E7490',
     borderColor: '#0E7490',
@@ -716,6 +773,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  filterTextDark: {
+    color: '#CBD5E1',
   },
   filterTextActive: {
     color: '#FFFFFF',
@@ -755,6 +815,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  sortButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   sortMenu: {
     position: 'absolute',
     top: 40,
@@ -767,6 +831,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     zIndex: 120,
     elevation: 20,
+  },
+  sortMenuDark: {
+    backgroundColor: '#111827',
+    borderColor: '#334155',
   },
   sortMenuFloating: {
     top: 0,
@@ -792,6 +860,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
+  },
+  sortMenuTextDark: {
+    color: '#CBD5E1',
   },
   sortMenuTextActive: {
     color: '#0E7490',
@@ -842,6 +913,23 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     padding: 10,
     marginBottom: 10,
+  },
+  cardWeb: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 1px 3px rgba(2,6,23,0.04)',
+          transitionDuration: '260ms',
+          transitionProperty: 'box-shadow, opacity',
+          transitionTimingFunction: 'cubic-bezier(0.22,1,0.36,1)',
+        } as any)
+      : null),
+  },
+  cardWebHovered: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 8px 16px rgba(2,6,23,0.08)',
+        } as any)
+      : null),
   },
   cardDark: {
     backgroundColor: '#111827',
@@ -1089,6 +1177,9 @@ const styles = StyleSheet.create({
   },
   modalSaveDisabled: {
     backgroundColor: '#94A3B8',
+  },
+  deleteConfirmBtn: {
+    backgroundColor: '#DC2626',
   },
   modalSaveText: {
     fontSize: 14,

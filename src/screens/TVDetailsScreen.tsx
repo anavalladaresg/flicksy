@@ -5,8 +5,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import MagicLoader from '@/components/loaders/MagicLoader';
+import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
-    ActivityIndicator,
     Image,
     Linking,
     SafeAreaView,
@@ -201,7 +202,9 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#2196F3" />
+        <CenteredOverlay>
+          <MagicLoader size={54} text="Cargando detalles..." />
+        </CenteredOverlay>
       </SafeAreaView>
     );
   }

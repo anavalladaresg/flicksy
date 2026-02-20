@@ -1,8 +1,6 @@
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 let configured = false;
-let projectIdWarned = false;
 
 type NotificationsModule = {
   AndroidImportance: { MAX: number };
@@ -25,6 +23,7 @@ function getNotificationsModule(): NotificationsModule | null {
 }
 
 export function configureNotifications() {
+  if (Platform.OS !== 'web') return;
   const Notifications = getNotificationsModule();
   if (!Notifications) return;
   if (configured) return;
@@ -40,49 +39,14 @@ export function configureNotifications() {
 }
 
 export async function registerPushToken(): Promise<string | null> {
-  const Notifications = getNotificationsModule();
-  if (!Notifications) return null;
-  if (Platform.OS === 'web') return null;
-
-  try {
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#0E7490',
-      });
-    }
-
-    const permissions = await Notifications.getPermissionsAsync();
-    let finalStatus = permissions.status;
-    if (finalStatus !== 'granted') {
-      const request = await Notifications.requestPermissionsAsync();
-      finalStatus = request.status;
-    }
-    if (finalStatus !== 'granted') return null;
-
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-    if (!projectId) {
-      if (!projectIdWarned) {
-        console.warn('[notifications] Missing EAS projectId. Skipping push token registration.');
-        projectIdWarned = true;
-      }
-      return null;
-    }
-
-    const response = await Notifications.getExpoPushTokenAsync({ projectId });
-    return response.data ?? null;
-  } catch (error) {
-    console.warn('[notifications] registerPushToken failed:', error);
-    return null;
-  }
+  // En móvil están deshabilitadas por requisito de producto.
+  return null;
 }
 
 export async function sendLocalNotification(title: string, body: string) {
   const Notifications = getNotificationsModule();
   if (!Notifications) return;
-  if (Platform.OS === 'web') return;
+  if (Platform.OS !== 'web') return;
   await Notifications.scheduleNotificationAsync({
     content: { title, body },
     trigger: null,

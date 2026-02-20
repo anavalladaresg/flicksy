@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Animated,
+  Easing,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import MagicLoader from '@/components/loaders/MagicLoader';
+import { Fonts } from '@/constants/theme';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useGamesBySort } from '../features/games/presentation/hooks';
 import { GameSortOption } from '../features/games/domain/repositories';
@@ -99,6 +104,11 @@ interface BrowseSectionScreenProps {
 
 function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const isWeb = Platform.OS === 'web';
+  const entranceAnim = useState(new Animated.Value(0))[0];
+  const auraAnim = useRef(new Animated.Value(0)).current;
+  const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
 
   const [movieSort, setMovieSort] = useState<MovieSortOption>('popularity.desc');
   const [tvSort, setTVSort] = useState<TVSortOption>('popularity.desc');
@@ -130,6 +140,36 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
     setItems((prev) => dedupeItems([...prev, ...mapped]));
   }, [activeQuery.data, type]);
 
+  useEffect(() => {
+    Animated.timing(entranceAnim, {
+      toValue: 1,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [entranceAnim]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(auraAnim, {
+          toValue: 1,
+          duration: 4600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(auraAnim, {
+          toValue: 0,
+          duration: 4600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [auraAnim]);
+
   const title = type === 'movie' ? 'Películas' : type === 'tv' ? 'Series' : 'Videojuegos';
   const hasMore = activeQuery.data ? page < activeQuery.data.totalPages : false;
 
@@ -138,16 +178,87 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   }, [type]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={18} color="#0F172A" />
-          <Text style={styles.backButtonText}>Volver</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{title}</Text>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+      {isWeb ? (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.webAura,
+              styles.webAuraA,
+              {
+                opacity: isDark ? 0.24 : 0.42,
+                transform: [
+                  {
+                    translateY: auraAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-12, 12],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.webAura,
+              styles.webAuraB,
+              {
+                opacity: isDark ? 0.2 : 0.26,
+                transform: [
+                  {
+                    translateY: auraAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, -10],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        </>
+      ) : null}
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <Animated.View
+        style={[
+          styles.topSection,
+          isWeb && styles.topSectionWeb,
+          {
+            opacity: entranceAnim,
+            transform: [
+              {
+                translateY: entranceAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [16, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.header,
+            isWeb && {
+              borderColor: isDark ? 'rgba(71,85,105,0.45)' : 'rgba(125,211,252,0.25)',
+              backgroundColor: isDark ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.6)',
+              boxShadow: isDark ? '0 14px 28px rgba(2,6,23,0.36)' : '0 14px 28px rgba(2,6,23,0.12)',
+            },
+          ]}
+        >
+          <TouchableOpacity style={[styles.backButton, isDark && styles.backButtonDark]} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={18} color={isDark ? '#E5E7EB' : '#0F172A'} />
+            <Text style={[styles.backButtonText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Volver</Text>
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{title}</Text>
+        </View>
+      </Animated.View>
+
+      <Animated.ScrollView
+        style={{ opacity: entranceAnim }}
+        contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}
+      >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -158,14 +269,14 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
             return (
               <TouchableOpacity
                 key={option.value}
-                style={[styles.sortChip, isActive && styles.sortChipActive]}
+                style={[styles.sortChip, isDark && styles.sortChipDark, isActive && styles.sortChipActive]}
                 onPress={() => {
                   if (type === 'movie') setMovieSort(option.value as MovieSortOption);
                   if (type === 'tv') setTVSort(option.value as TVSortOption);
                   if (type === 'game') setGameSort(option.value as GameSortOption);
                 }}
               >
-                <Text style={[styles.sortChipText, isActive && styles.sortChipTextActive]}>
+                <Text style={[styles.sortChipText, { color: isDark ? '#CBD5E1' : '#334155' }, isActive && styles.sortChipTextActive]}>
                   {option.label}
                 </Text>
               </TouchableOpacity>
@@ -175,32 +286,66 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
 
         {activeQuery.isLoading && page === 1 ? (
           <View style={styles.centeredInline}>
-            <ActivityIndicator size="small" color="#0E7490" />
+            <MagicLoader size={26} color="#0E7490" secondaryColor="#A5F3FC" />
           </View>
         ) : activeQuery.isError ? (
           <Text style={styles.errorLine}>No se pudo cargar el listado.</Text>
         ) : (
           <>
-            {items.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.item}
-                activeOpacity={0.75}
-                onPress={() => router.push(`/${type}/${item.id}`)}
-              >
-                <Image
-                  source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
-                  style={styles.poster}
-                  resizeMode="cover"
-                />
-                <View style={styles.itemTextWrap}>
-                  <Text style={styles.itemTitle}>{item.name}</Text>
-                  <Text style={styles.itemMeta}>
-                    {item.rating ? `⭐ ${item.rating.toFixed(1)}` : 'Sin rating'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {items.map((item, index) => {
+              const start = Math.min(index * 0.05, 0.62);
+              const end = Math.min(start + 0.26, 1);
+              return (
+                <Animated.View
+                  key={item.id}
+                  style={{
+                    opacity: entranceAnim.interpolate({
+                      inputRange: [start, end],
+                      outputRange: [0, 1],
+                      extrapolate: 'clamp',
+                    }),
+                    transform: [
+                      {
+                        translateY: entranceAnim.interpolate({
+                          inputRange: [start, end],
+                          outputRange: [14, 0],
+                          extrapolate: 'clamp',
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.item,
+                      isDark && styles.itemDark,
+                    ]}
+                    activeOpacity={0.75}
+                    onPress={() => router.push(`/${type}/${item.id}`)}
+                    {...(isWeb
+                      ? {
+                          onMouseEnter: () => setHoveredItemId(item.id),
+                          onMouseLeave: () => setHoveredItemId(null),
+                        }
+                      : {})}
+                  >
+                    <View style={[styles.posterFrame, isWeb && hoveredItemId === item.id && styles.posterFrameHovered]}>
+                      <Image
+                        source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
+                        style={styles.poster}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <View style={styles.itemTextWrap}>
+                      <Text style={[styles.itemTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{item.name}</Text>
+                      <Text style={[styles.itemMeta, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                        {item.rating ? `⭐ ${item.rating.toFixed(1)}` : 'Sin rating'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
 
             {hasMore && (
               <TouchableOpacity
@@ -215,7 +360,7 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
             )}
           </>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -224,11 +369,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  webAura: {
+    position: 'absolute',
+    width: 420,
+    height: 420,
+    borderRadius: 999,
+    zIndex: 0,
+    filter: 'blur(56px)' as any,
+  },
+  webAuraA: {
+    top: -160,
+    right: -130,
+    backgroundColor: 'rgba(56,189,248,0.42)',
+  },
+  webAuraB: {
+    bottom: -190,
+    left: -150,
+    backgroundColor: 'rgba(20,184,166,0.36)',
+  },
+  topSection: {
+    width: '100%',
+  },
+  topSectionWeb: {
+    width: '100%',
+    maxWidth: 980,
+    alignSelf: 'center',
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 6,
+    ...(Platform.OS === 'web' && {
+      marginTop: 10,
+      marginHorizontal: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      backdropFilter: 'blur(14px)' as any,
+    } as any),
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -241,6 +421,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     marginBottom: 8,
   },
+  backButtonDark: {
+    backgroundColor: '#1F2937',
+  },
   backButtonText: {
     fontSize: 12,
     fontWeight: '700',
@@ -250,10 +433,20 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     color: '#0F172A',
+    ...(Platform.OS === 'web' && {
+      fontFamily: Fonts.web?.serif || "Georgia, 'Times New Roman', serif",
+      letterSpacing: 0.2,
+    }),
   },
   content: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+    paddingTop: 10,
+  },
+  contentWeb: {
+    width: '100%',
+    maxWidth: 980,
+    alignSelf: 'center',
   },
   sortChips: {
     paddingVertical: 10,
@@ -266,6 +459,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  sortChipDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
   },
   sortChipActive: {
     backgroundColor: '#0E7490',
@@ -288,12 +485,39 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 12px 24px rgba(2,6,23,0.08)',
+      transitionDuration: '460ms',
+      transitionProperty: 'box-shadow',
+      transitionTimingFunction: 'cubic-bezier(0.4,0,0.2,1)',
+      overflow: 'visible',
+      willChange: 'box-shadow',
+    } as any),
+  },
+  itemDark: {
+    backgroundColor: '#111827',
+    borderColor: '#1F2937',
   },
   poster: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E2E8F0',
+    ...(Platform.OS === 'web' && {
+      transitionDuration: '240ms',
+      transitionProperty: 'box-shadow',
+      transitionTimingFunction: 'cubic-bezier(0.22,1,0.36,1)',
+    } as any),
+  },
+  posterFrame: {
     width: 58,
     height: 82,
     borderRadius: 8,
+    overflow: 'hidden',
     backgroundColor: '#E2E8F0',
+  },
+  posterFrameHovered: {
+    boxShadow: '0 12px 24px rgba(2,6,23,0.28)',
+    zIndex: 8,
   },
   itemTextWrap: {
     marginLeft: 10,

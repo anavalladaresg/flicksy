@@ -1,5 +1,6 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useEscapeClose } from '../../hooks/use-escape-close';
 
 type FloatingModalShellProps = {
   children: React.ReactNode;
@@ -8,6 +9,8 @@ type FloatingModalShellProps = {
 };
 
 export default function FloatingModalShell({ children, onClose, maxWidth = 1024 }: FloatingModalShellProps) {
+  useEscapeClose(Platform.OS === 'web', onClose);
+
   if (Platform.OS !== 'web') return <>{children}</>;
 
   return (

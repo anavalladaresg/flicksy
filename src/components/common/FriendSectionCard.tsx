@@ -1,9 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import UserAvatar from './UserAvatar';
 import CompatibilityHeartBadge from './CompatibilityHeartBadge';
 import type { AddFriendSearchResult } from './AddFriendModal';
+import MagicLoader from '@/components/loaders/MagicLoader';
 
 interface FriendPreviewItem {
   id: string;
@@ -48,6 +49,7 @@ export default function FriendSectionCard({
   onCompatibilityLongPress,
 }: FriendSectionCardProps) {
   const [hoveredFriendId, setHoveredFriendId] = useState<string | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const visibleFriends = friends.slice(0, 5);
   const extraCount = Math.max(0, friendCount - visibleFriends.length);
   const showDropdown = searchQuery.trim().length > 0;
@@ -129,25 +131,45 @@ export default function FriendSectionCard({
         ) : null}
       </ScrollView>
 
-      <View style={[styles.searchWrap, isDark && styles.searchWrapDark]}>
+      <View
+        style={[
+          styles.searchWrap,
+          isDark && styles.searchWrapDark,
+          isSearchFocused && styles.searchWrapFocused,
+          isSearchFocused && isDark && styles.searchWrapFocusedDark,
+        ]}
+      >
         <MaterialIcons name="search" size={16} color={isDark ? '#94A3B8' : '#64748B'} />
         <TextInput
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
           placeholder="Busca para añadir usuarios..."
           placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
-          style={[styles.searchInput, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
+          style={[
+            styles.searchInput,
+            { color: isDark ? '#E5E7EB' : '#0F172A' },
+            Platform.OS === 'web' ? styles.searchInputWeb : null,
+          ]}
           autoCorrect={false}
           autoCapitalize="none"
           returnKeyType="search"
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
         />
+        {searchQuery.length > 0 ? (
+          <TouchableOpacity style={styles.clearButton} onPress={() => onChangeSearchQuery('')}>
+            <View style={[styles.clearButtonInner, { backgroundColor: isDark ? '#1F2937' : '#E2E8F0' }]}>
+              <MaterialIcons name="close" size={14} color={isDark ? '#CBD5E1' : '#334155'} />
+            </View>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {showDropdown ? (
         <View style={[styles.dropdown, isDark && styles.dropdownDark]}>
           {searchLoading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator size="small" color="#0E7490" />
+              <MagicLoader size={28} text="Buscando..." />
             </View>
           ) : (
             <>
@@ -156,7 +178,7 @@ export default function FriendSectionCard({
                 <Text style={[styles.emptyText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Sin resultados.</Text>
               ) : null}
               {searchResults.slice(0, 5).map((item, index, arr) => {
-                const isAdd = item.state !== 'friend' && item.state !== 'sent';
+                const isAdd = item.state !== 'friend' && item.state !== 'sent' && item.state !== 'sending';
                 return (
                   <View
                     key={item.id}
@@ -179,7 +201,7 @@ export default function FriendSectionCard({
                       onPress={() => onSendFriendRequest(item.id)}
                     >
                       <Text style={[styles.resultActionText, !isAdd && styles.resultActionTextDisabled]}>
-                        {item.state === 'friend' ? 'Ya es tu amigo' : item.state === 'sent' ? 'Enviada' : 'Añadir'}
+                        {item.state === 'friend' ? 'Ya es tu amigo' : item.state === 'sending' ? 'Enviando...' : item.state === 'sent' ? 'Solicitud enviada' : 'Añadir'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -362,16 +384,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    position: 'relative',
   },
   searchWrapDark: {
     borderColor: '#334155',
     backgroundColor: '#0B1220',
+  },
+  searchWrapFocused: {
+    borderColor: '#38BDF8',
+    ...(Platform.OS === 'web' ? ({ boxShadow: '0 0 0 2px rgba(56,189,248,0.22)' } as any) : null),
+  },
+  searchWrapFocusedDark: {
+    borderColor: '#7DD3FC',
+    ...(Platform.OS === 'web' ? ({ boxShadow: '0 0 0 2px rgba(125,211,252,0.2)' } as any) : null),
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
     paddingVertical: 9,
+    paddingRight: 28,
+  },
+  searchInputWeb: {
+    ...(Platform.OS === 'web'
+      ? ({
+          outlineStyle: 'none',
+        } as any)
+      : null),
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateY: -11 }],
+  },
+  clearButtonInner: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dropdown: {
     borderWidth: 1,

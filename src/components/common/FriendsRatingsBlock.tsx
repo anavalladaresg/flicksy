@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendItemRating } from '../../services/social';
+import { useEscapeClose } from '../../hooks/use-escape-close';
 
 interface FriendsRatingsBlockProps {
   itemLabel: string;
@@ -22,6 +23,7 @@ export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatin
   const isDark = useColorScheme() === 'dark';
   const [expanded, setExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  useEscapeClose(isModalOpen, () => setIsModalOpen(false));
 
   const visible = useMemo(() => ratings.slice(0, expanded ? 5 : 3), [expanded, ratings]);
 
@@ -188,4 +190,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-

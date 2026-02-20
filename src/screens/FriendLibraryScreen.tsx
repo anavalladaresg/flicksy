@@ -1,12 +1,14 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import UserAvatar from '../components/common/UserAvatar';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
+import { useEscapeClose } from '../hooks/use-escape-close';
 import { getFriendLibrary } from '../services/social';
 import type { MediaType, TrackedItem } from '../types';
+import MagicLoader from '@/components/loaders/MagicLoader';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 type Filter = 'all' | MediaType;
@@ -49,19 +51,29 @@ function getStatusColor(status: TrackedItem['status']) {
 
 function FriendLibraryScreen() {
   const isDark = useColorScheme() === 'dark';
+  const isWeb = Platform.OS === 'web';
   const router = useRouter();
   const { id, name, avatarUrl } = useLocalSearchParams<{ id: string; name?: string; avatarUrl?: string }>();
   const [items, setItems] = useState<TrackedItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
   const [isSortOpen, setIsSortOpen] = useState(false);
+  const [hoveredCardId, setHoveredCardId] = useState<string | number | null>(null);
+
+  useEscapeClose(isSortOpen, () => setIsSortOpen(false));
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     (async () => {
-      const data = await getFriendLibrary(id);
-      if (!cancelled) setItems(data);
+      setIsLoading(true);
+      try {
+        const data = await getFriendLibrary(id);
+        if (!cancelled) setItems(data);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -100,7 +112,7 @@ function FriendLibraryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, isWeb && styles.headerWeb]}>
         <TouchableOpacity style={[styles.backBtn, isDark && styles.backBtnDark]} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={18} color={isDark ? '#E5E7EB' : '#0F172A'} />
         </TouchableOpacity>
@@ -109,7 +121,7 @@ function FriendLibraryScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.friendHero, isDark && styles.friendHeroDark]}>
+      <View style={[styles.friendHero, isDark && styles.friendHeroDark, isWeb && styles.friendHeroWeb]}>
         <UserAvatar avatarUrl={avatarUrl ?? null} size={86} isDark={isDark} />
         <Text style={[styles.friendHeroName, { color: isDark ? '#E5E7EB' : '#0F172A' }]} numberOfLines={1}>
           {name || 'Amigo/a'}
@@ -119,29 +131,29 @@ function FriendLibraryScreen() {
         </Text>
       </View>
 
-      <View style={styles.controls}>
-        <View style={styles.filterBar}>
+      <View style={[styles.controls, isWeb && styles.controlsWeb]}>
+        <View style={[styles.filterBar, isWeb && styles.filterBarWeb]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-            <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-              <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : '#334155'} />
+            <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+              <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.filterChip, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
-              <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : '#334155'} />
-              <Text style={[styles.filterText, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
+            <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
+              <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+              <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
               <View style={styles.chipCounter}>
                 <Text style={styles.chipCounterText}>{counters.movie}</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.filterChip, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
-              <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : '#334155'} />
-              <Text style={[styles.filterText, filter === 'tv' && styles.filterTextActive]}>Series</Text>
+            <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
+              <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+              <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'tv' && styles.filterTextActive]}>Series</Text>
               <View style={styles.chipCounter}>
                 <Text style={styles.chipCounterText}>{counters.tv}</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.filterChip, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
-              <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : '#334155'} />
-              <Text style={[styles.filterText, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
+            <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
+              <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
+              <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
               <View style={styles.chipCounter}>
                 <Text style={styles.chipCounterText}>{counters.game}</Text>
               </View>
@@ -149,11 +161,11 @@ function FriendLibraryScreen() {
           </ScrollView>
 
           <View style={styles.sortAnchor}>
-            <TouchableOpacity style={styles.sortButton} onPress={() => setIsSortOpen((prev) => !prev)}>
-              <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color="#0F172A" />
+            <TouchableOpacity style={[styles.sortButton, isDark && styles.sortButtonDark]} onPress={() => setIsSortOpen((prev) => !prev)}>
+              <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
             </TouchableOpacity>
             {isSortOpen && (
-              <View style={styles.sortMenu}>
+              <View style={[styles.sortMenu, isDark && styles.sortMenuDark]}>
                 {SORT_OPTIONS.map((option) => {
                   const active = sortBy === option.value;
                   return (
@@ -165,8 +177,8 @@ function FriendLibraryScreen() {
                         setIsSortOpen(false);
                       }}
                     >
-                      <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : '#334155'} />
-                      <Text style={[styles.sortMenuText, active && styles.sortMenuTextActive]}>{option.label}</Text>
+                      <MaterialIcons name={option.icon} size={14} color={active ? '#0E7490' : isDark ? '#CBD5E1' : '#334155'} />
+                      <Text style={[styles.sortMenuText, isDark && styles.sortMenuTextDark, active && styles.sortMenuTextActive]}>{option.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -182,10 +194,15 @@ function FriendLibraryScreen() {
         </Modal>
       )}
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {filtered.length === 0 ? (
+      <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}>
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <MagicLoader size={52} text="Cargando biblioteca..." />
+          </View>
+        ) : null}
+        {!isLoading && filtered.length === 0 ? (
           <Text style={[styles.emptyText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Sin contenido reciente.</Text>
-        ) : (
+        ) : !isLoading ? (
           filtered.map((item, index) => {
             const previous = filtered[index - 1];
             const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
@@ -193,7 +210,12 @@ function FriendLibraryScreen() {
               <View key={item.id}>
                 {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
                 <TouchableOpacity
-                  style={[styles.card, isDark && styles.cardDark]}
+                  style={[
+                    styles.card,
+                    isDark && styles.cardDark,
+                    isWeb && styles.cardWeb,
+                    isWeb && hoveredCardId === item.id && styles.cardWebHovered,
+                  ]}
                   onPress={() =>
                     router.push({
                       pathname: `/${item.mediaType}/${item.externalId}` as any,
@@ -203,6 +225,12 @@ function FriendLibraryScreen() {
                       },
                     })
                   }
+                  {...(isWeb
+                    ? {
+                        onMouseEnter: () => setHoveredCardId(item.id),
+                        onMouseLeave: () => setHoveredCardId(null),
+                      }
+                    : {})}
                 >
                   <Image source={resolvePoster(item) ? { uri: resolvePoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
                   <View style={styles.meta}>
@@ -220,7 +248,7 @@ function FriendLibraryScreen() {
               </View>
             );
           })
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -229,6 +257,9 @@ function FriendLibraryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 16, paddingTop: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerWeb: {
+    paddingHorizontal: 16,
+  },
   backBtn: {
     width: 32,
     height: 32,
@@ -256,6 +287,10 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     gap: 8,
   },
+  friendHeroWeb: {
+    marginHorizontal: 16,
+    borderRadius: 20,
+  },
   friendHeroDark: {
     borderColor: '#1F2937',
     backgroundColor: '#111827',
@@ -276,12 +311,18 @@ const styles = StyleSheet.create({
     zIndex: 60,
     elevation: 12,
   },
+  controlsWeb: {
+    marginTop: 14,
+  },
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
     zIndex: 60,
+  },
+  filterBarWeb: {
+    paddingHorizontal: 16,
   },
   filtersRow: {
     paddingVertical: 4,
@@ -299,6 +340,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  filterChipDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   filterChipActive: {
     backgroundColor: '#0E7490',
     borderColor: '#0E7490',
@@ -307,6 +352,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  filterTextDark: {
+    color: '#CBD5E1',
   },
   filterTextActive: {
     color: '#FFFFFF',
@@ -346,6 +394,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  sortButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   sortMenu: {
     position: 'absolute',
     top: 40,
@@ -358,6 +410,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     zIndex: 120,
     elevation: 20,
+  },
+  sortMenuDark: {
+    backgroundColor: '#111827',
+    borderColor: '#334155',
   },
   sortOverlay: {
     flex: 1,
@@ -379,12 +435,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#334155',
   },
+  sortMenuTextDark: {
+    color: '#CBD5E1',
+  },
   sortMenuTextActive: {
     color: '#0E7490',
     fontWeight: '700',
   },
   content: { padding: 16, gap: 8, paddingBottom: 24 },
+  contentWeb: {
+    paddingHorizontal: 16,
+  },
   emptyText: { fontSize: 13, fontWeight: '600' },
+  loadingWrap: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   card: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -393,6 +460,23 @@ const styles = StyleSheet.create({
     padding: 10,
     flexDirection: 'row',
     gap: 10,
+  },
+  cardWeb: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 1px 3px rgba(2,6,23,0.04)',
+          transitionDuration: '260ms',
+          transitionProperty: 'box-shadow, opacity',
+          transitionTimingFunction: 'cubic-bezier(0.22,1,0.36,1)',
+        } as any)
+      : null),
+  },
+  cardWebHovered: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 8px 16px rgba(2,6,23,0.08)',
+        } as any)
+      : null),
   },
   cardDark: {
     borderColor: '#1F2937',

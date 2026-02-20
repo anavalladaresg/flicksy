@@ -1,14 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import UserAvatar from './UserAvatar';
+import { useEscapeClose } from '../../hooks/use-escape-close';
+import MagicLoader from '@/components/loaders/MagicLoader';
 
 export interface AddFriendSearchResult {
   id: string;
   name: string;
   username: string;
   avatarUrl?: string | null;
-  state?: 'add' | 'sent' | 'friend';
+  state?: 'add' | 'sending' | 'sent' | 'friend';
 }
 
 interface AddFriendModalProps {
@@ -34,14 +36,16 @@ export default function AddFriendModal({
   onChangeQuery,
   onSendRequest,
 }: AddFriendModalProps) {
+  useEscapeClose(visible, onClose);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.card, isDark && styles.cardDark]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Añadir amigo</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Text style={styles.closeText}>Cerrar</Text>
+            <TouchableOpacity style={[styles.closeBtn, isDark && styles.closeBtnDark]} onPress={onClose}>
+              <Text style={[styles.closeText, isDark && styles.closeTextDark]}>Cerrar</Text>
             </TouchableOpacity>
           </View>
 
@@ -57,11 +61,18 @@ export default function AddFriendModal({
               autoCorrect={false}
               returnKeyType="search"
             />
+            {query.length > 0 ? (
+              <TouchableOpacity style={styles.clearButton} onPress={() => onChangeQuery('')}>
+                <View style={[styles.clearButtonInner, { backgroundColor: isDark ? '#1F2937' : '#E2E8F0' }]}>
+                  <MaterialIcons name="close" size={14} color={isDark ? '#CBD5E1' : '#334155'} />
+                </View>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {loading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator size="small" color="#0E7490" />
+              <MagicLoader size={30} text="Buscando..." />
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
@@ -73,7 +84,7 @@ export default function AddFriendModal({
               ) : null}
               {!!error ? <Text style={[styles.errorText, { color: '#DC2626' }]}>{error}</Text> : null}
               {results.map((item) => {
-                const isAdd = item.state !== 'friend' && item.state !== 'sent';
+                const isAdd = item.state !== 'friend' && item.state !== 'sent' && item.state !== 'sending';
                 return (
                   <View key={item.id} style={[styles.resultRow, isDark && styles.resultRowDark]}>
                     <View style={styles.resultMain}>
@@ -89,11 +100,11 @@ export default function AddFriendModal({
                     </View>
                     <TouchableOpacity
                       disabled={!isAdd}
-                      style={[styles.addBtn, !isAdd && styles.addBtnDisabled]}
+                      style={[styles.addBtn, !isAdd && styles.addBtnDisabled, isDark && !isAdd && styles.addBtnDisabledDark]}
                       onPress={() => onSendRequest(item.id)}
                     >
-                      <Text style={[styles.addBtnText, !isAdd && styles.addBtnTextDisabled]}>
-                        {item.state === 'friend' ? 'Ya es tu amigo' : item.state === 'sent' ? 'Solicitud enviada' : 'Añadir'}
+                      <Text style={[styles.addBtnText, !isAdd && styles.addBtnTextDisabled, isDark && !isAdd && styles.addBtnTextDisabledDark]}>
+                        {item.state === 'friend' ? 'Ya es tu amigo' : item.state === 'sending' ? 'Enviando...' : item.state === 'sent' ? 'Solicitud enviada' : 'Añadir'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -144,10 +155,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: '#FFFFFF',
   },
+  closeBtnDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   closeText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  closeTextDark: {
+    color: '#CBD5E1',
   },
   searchWrap: {
     borderWidth: 1,
@@ -159,6 +177,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    position: 'relative',
   },
   searchWrapDark: {
     borderColor: '#334155',
@@ -169,6 +188,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     paddingVertical: 10,
+    paddingRight: 28,
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateY: -11 }],
+  },
+  clearButtonInner: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingWrap: {
     paddingVertical: 18,
@@ -230,6 +268,9 @@ const styles = StyleSheet.create({
   addBtnDisabled: {
     backgroundColor: '#E2E8F0',
   },
+  addBtnDisabledDark: {
+    backgroundColor: '#1F2937',
+  },
   addBtnText: {
     color: '#FFFFFF',
     fontSize: 11,
@@ -237,5 +278,8 @@ const styles = StyleSheet.create({
   },
   addBtnTextDisabled: {
     color: '#64748B',
+  },
+  addBtnTextDisabledDark: {
+    color: '#94A3B8',
   },
 });
