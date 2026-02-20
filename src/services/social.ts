@@ -635,6 +635,31 @@ export async function getFriendsActivity(limit = 12): Promise<FriendActivityItem
   return mapped.slice(0, limit);
 }
 
+function normalizeCompatibilityRating(value: unknown): number | null {
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+  const normalized = value > 10 ? value / 10 : value;
+  return Math.max(0, Math.min(10, normalized));
+}
+
+function normalizeCompatibilityStatus(value: unknown): 'planned' | 'in_progress' | 'completed' | 'dropped' | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'watching' || normalized === 'playing' || normalized === 'in_progress' || normalized === 'in-progress') {
+    return 'in_progress';
+  }
+  if (normalized === 'completed' || normalized === 'watched' || normalized === 'played') {
+    return 'completed';
+  }
+  if (normalized === 'planned' || normalized === 'plan_to_watch' || normalized === 'plan_to_play') {
+    return 'planned';
+  }
+  if (normalized === 'dropped') {
+    return 'dropped';
+  }
+  return null;
+}
+
 export async function getFriendsCompatibility(): Promise<Record<string, FriendCompatibility>> {
   if (!supabase) return {};
   const userId = await getCurrentUserId();
@@ -664,15 +689,16 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
     string,
     {
       rating: number | null;
-      status: string | null;
+      status: 'planned' | 'in_progress' | 'completed' | 'dropped' | null;
     }
   >();
   (ownItemsRes.data ?? []).forEach((row: any) => {
     ownByKey.set(`${row.media_type}:${row.external_id}`, {
-      rating: typeof row.rating === 'number' ? row.rating : null,
-      status: row.status ?? null,
+      rating: normalizeCompatibilityRating(row.rating),
+      status: normalizeCompatibilityStatus(row.status),
     });
   });
+  const ownKeys = new Set(ownByKey.keys());
 
   const groupedByFriend = new Map<string, any[]>();
   (friendsItemsRes.data ?? []).forEach((row: any) => {
@@ -684,6 +710,7 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
   const result: Record<string, FriendCompatibility> = {};
   friendIds.forEach((friendId) => {
     const friendRows = groupedByFriend.get(friendId) ?? [];
+    const friendKeys = new Set(friendRows.map((row) => `${row.media_type}:${row.external_id}`));
     let sharedItems = 0;
     let sharedRatedItems = 0;
     let ratingDiffSum = 0;
@@ -697,26 +724,41 @@ export async function getFriendsCompatibility(): Promise<Record<string, FriendCo
       sharedItems += 1;
 
       const ownRating = own.rating;
-      const friendRating = typeof row.rating === 'number' ? row.rating : null;
+      const friendRating = normalizeCompatibilityRating(row.rating);
       if (typeof ownRating === 'number' && typeof friendRating === 'number') {
         sharedRatedItems += 1;
         ratingDiffSum += Math.abs(ownRating - friendRating);
       }
 
-      if (own.status && row.status) {
+      const friendStatus = normalizeCompatibilityStatus(row.status);
+      if (own.status && friendStatus) {
         statusComparable += 1;
-        if (own.status === row.status) statusMatches += 1;
+        if (own.status === friendStatus) statusMatches += 1;
       }
     });
 
+    const overlapScore =
+      sharedItems > 0
+        ? (sharedItems / Math.max(1, Math.max(ownKeys.size, friendKeys.size))) * 100
+        : 0;
     const ratingScore =
-      sharedRatedItems > 0 ? Math.max(0, 100 - (ratingDiffSum / sharedRatedItems) * 10) : null;
+      sharedRatedItems > 0 ? Math.max(0, 100 - (ratingDiffSum / sharedRatedItems) * 12.5) : null;
     const statusScore = statusComparable > 0 ? (statusMatches / statusComparable) * 100 : null;
 
     let compatibility = 0;
-    if (ratingScore !== null && statusScore !== null) compatibility = ratingScore * 0.8 + statusScore * 0.2;
-    else if (ratingScore !== null) compatibility = ratingScore;
-    else if (statusScore !== null) compatibility = statusScore;
+    if (sharedItems > 0) {
+      let weightedScore = overlapScore * 0.4;
+      let totalWeight = 0.4;
+      if (ratingScore !== null) {
+        weightedScore += ratingScore * 0.45;
+        totalWeight += 0.45;
+      }
+      if (statusScore !== null) {
+        weightedScore += statusScore * 0.15;
+        totalWeight += 0.15;
+      }
+      compatibility = weightedScore / totalWeight;
+    }
 
     result[friendId] = {
       friendId,

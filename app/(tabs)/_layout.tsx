@@ -15,6 +15,7 @@ import MagicLoader from '@/components/loaders/MagicLoader';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const sceneBackground = colorScheme === 'dark' ? '#0B1220' : '#F8FAFC';
   const isWeb = Platform.OS === 'web';
   const { isLoading, isSignedIn } = useAuthStatus();
   const { userId } = useAuth();
@@ -78,6 +79,7 @@ export default function TabLayout() {
     <Tabs
       tabBar={webTabBar}
       screenOptions={{
+        sceneStyle: { backgroundColor: sceneBackground },
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarInactiveTintColor: colorScheme === 'dark' ? '#94A3B8' : '#64748B',
         headerShown: false,

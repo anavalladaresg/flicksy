@@ -82,6 +82,7 @@ function SearchScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isWeb = Platform.OS === 'web';
+  const RootContainer = isWeb ? View : SafeAreaView;
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -326,7 +327,7 @@ function SearchScreen() {
   const showHistoryBlock = !hasTypedQuery && isInputFocused && searchHistory.length > 0;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}> 
+    <RootContainer style={[styles.container, { backgroundColor: palette.background }]}> 
       <View style={[styles.headerWrap, isWeb && { paddingTop: 12 }]}>
       <View
         style={[
@@ -566,7 +567,7 @@ function SearchScreen() {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </RootContainer>
   );
 }
 

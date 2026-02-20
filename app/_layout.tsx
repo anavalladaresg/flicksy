@@ -24,6 +24,32 @@ export const unstable_settings = {
 };
 
 let globalFontApplied = false;
+const APP_LIGHT_BACKGROUND = '#F8FAFC';
+const APP_DARK_BACKGROUND = '#0B1220';
+
+const FlicksyLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#0E7490',
+    background: APP_LIGHT_BACKGROUND,
+    card: '#FFFFFF',
+    border: '#E2E8F0',
+    text: '#0F172A',
+  },
+};
+
+const FlicksyDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: '#38BDF8',
+    background: APP_DARK_BACKGROUND,
+    card: APP_DARK_BACKGROUND,
+    border: '#1E293B',
+    text: '#E2E8F0',
+  },
+};
 
 export default function RootLayout() {
   if (!globalFontApplied) {
@@ -152,6 +178,7 @@ function AchievementUnlockWatcher() {
 
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
+  const appTheme = colorScheme === 'dark' ? FlicksyDarkTheme : FlicksyLightTheme;
   const { isLoading: isAuthLoading, isSignedIn } = useAuthStatus();
   const floatingModalOptions = Platform.OS === 'web'
     ? ({ presentation: 'transparentModal', animation: 'fade', headerShown: false, contentStyle: { backgroundColor: 'transparent' } } as const)
@@ -176,8 +203,8 @@ function RootLayoutContent() {
   if (isAuthLoading) {
     return (
       <QueryProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#F8FAFC' }}>
+        <ThemeProvider value={appTheme}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: appTheme.colors.background }}>
             <MagicLoader size={56} text="Cargando sesión..." />
           </View>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
@@ -188,9 +215,9 @@ function RootLayoutContent() {
 
   return (
     <QueryProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={appTheme}>
         <LoadingProvider>
-          <Stack>
+          <Stack screenOptions={{ contentStyle: { backgroundColor: appTheme.colors.background } }}>
             <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="browse/[type]" options={{ headerShown: false }} />
