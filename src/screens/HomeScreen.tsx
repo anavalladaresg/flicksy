@@ -70,7 +70,12 @@ function SectionRow({
   dark: boolean;
 }) {
   const router = useRouter();
+  const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     router.push(path as any);
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -85,6 +90,9 @@ function SectionRow({
   const [isHovering, setIsHovering] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
   const scrollAnimationRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -163,7 +171,31 @@ function SectionRow({
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
         onMouseEnter: () => setIsHovering(true),
-        onMouseLeave: () => setIsHovering(false),
+        onMouseLeave: () => {
+          setIsHovering(false);
+          isDraggingRef.current = false;
+        },
+        onMouseDown: (event: any) => {
+          const button = event?.nativeEvent?.button ?? event?.button;
+          if (button !== 0) return;
+          event?.preventDefault?.();
+          isDraggingRef.current = true;
+          suppressClickRef.current = false;
+          dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          dragStartOffsetRef.current = scrollOffsetRef.current;
+        },
+        onMouseMove: (event: any) => {
+          if (!isDraggingRef.current) return;
+          const clientX = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          const delta = dragStartXRef.current - clientX;
+          if (Math.abs(delta) > 6) suppressClickRef.current = true;
+          const nextOffset = Math.max(0, dragStartOffsetRef.current + delta);
+          scrollOffsetRef.current = nextOffset;
+          flatListRef.current?.scrollToOffset({ offset: nextOffset, animated: false });
+        },
+        onMouseUp: () => {
+          isDraggingRef.current = false;
+        },
       } : {})}
     >
       <View style={styles.sectionHeader}>
@@ -267,7 +299,12 @@ function PersonalizedRow({
   onDismiss: (item: RecommendationItem) => void;
 }) {
   const router = useRouter();
+  const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     router.push(path as any);
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -282,6 +319,9 @@ function PersonalizedRow({
   const [isHovering, setIsHovering] = useState(false);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
   const scrollAnimationRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -362,7 +402,31 @@ function PersonalizedRow({
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
         onMouseEnter: () => setIsHovering(true),
-        onMouseLeave: () => setIsHovering(false),
+        onMouseLeave: () => {
+          setIsHovering(false);
+          isDraggingRef.current = false;
+        },
+        onMouseDown: (event: any) => {
+          const button = event?.nativeEvent?.button ?? event?.button;
+          if (button !== 0) return;
+          event?.preventDefault?.();
+          isDraggingRef.current = true;
+          suppressClickRef.current = false;
+          dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          dragStartOffsetRef.current = scrollOffsetRef.current;
+        },
+        onMouseMove: (event: any) => {
+          if (!isDraggingRef.current) return;
+          const clientX = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          const delta = dragStartXRef.current - clientX;
+          if (Math.abs(delta) > 6) suppressClickRef.current = true;
+          const nextOffset = Math.max(0, dragStartOffsetRef.current + delta);
+          scrollOffsetRef.current = nextOffset;
+          flatListRef.current?.scrollToOffset({ offset: nextOffset, animated: false });
+        },
+        onMouseUp: () => {
+          isDraggingRef.current = false;
+        },
       } : {})}
     >
       <View style={styles.sectionHeader}>
@@ -469,7 +533,12 @@ function FriendsActivityRow({
   dark: boolean;
 }) {
   const router = useRouter();
+  const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     router.push(path as any);
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -483,6 +552,9 @@ function FriendsActivityRow({
   // Manejar scroll con rueda del ratón en web
   const [isHovering, setIsHovering] = useState(false);
   const scrollAnimationRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -561,7 +633,31 @@ function FriendsActivityRow({
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
         onMouseEnter: () => setIsHovering(true),
-        onMouseLeave: () => setIsHovering(false),
+        onMouseLeave: () => {
+          setIsHovering(false);
+          isDraggingRef.current = false;
+        },
+        onMouseDown: (event: any) => {
+          const button = event?.nativeEvent?.button ?? event?.button;
+          if (button !== 0) return;
+          event?.preventDefault?.();
+          isDraggingRef.current = true;
+          suppressClickRef.current = false;
+          dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          dragStartOffsetRef.current = scrollOffsetRef.current;
+        },
+        onMouseMove: (event: any) => {
+          if (!isDraggingRef.current) return;
+          const clientX = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
+          const delta = dragStartXRef.current - clientX;
+          if (Math.abs(delta) > 6) suppressClickRef.current = true;
+          const nextOffset = Math.max(0, dragStartOffsetRef.current + delta);
+          scrollOffsetRef.current = nextOffset;
+          flatListRef.current?.scrollToOffset({ offset: nextOffset, animated: false });
+        },
+        onMouseUp: () => {
+          isDraggingRef.current = false;
+        },
       } : {})}
     >
       <View style={styles.sectionHeader}>

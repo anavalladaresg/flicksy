@@ -24,6 +24,7 @@ export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatin
   const [expanded, setExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   useEscapeClose(isModalOpen, () => setIsModalOpen(false));
+  const article = itemLabel.trim().toLowerCase() === 'juego' ? 'este' : 'esta';
 
   const visible = useMemo(() => ratings.slice(0, expanded ? 5 : 3), [expanded, ratings]);
 
@@ -33,7 +34,7 @@ export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatin
     <>
       <View style={[styles.card, isDark && styles.cardDark]}>
         <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-          Amigos han puntuado esta {itemLabel}
+          Amigos han puntuado {article} {itemLabel}
         </Text>
         {visible.map((entry) => (
           <View key={entry.friendId} style={[styles.row, isDark && styles.rowDark]}>
@@ -97,16 +98,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#FCD34D',
-    backgroundColor: '#FFFBEB',
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
   },
   cardDark: {
-    backgroundColor: '#1F2937',
-    borderColor: '#92400E',
+    backgroundColor: '#0F172A',
+    borderColor: '#1E3A8A',
   },
   title: {
     fontSize: 13,
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   },
   row: {
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: '#BFDBFE',
     borderRadius: 10,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 10,
@@ -125,7 +126,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowDark: {
-    borderColor: '#374151',
+    borderColor: '#1E3A8A',
     backgroundColor: '#111827',
   },
   name: {
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     fontWeight: '800',
-    color: '#B45309',
+    color: '#0E7490',
   },
   actions: {
     marginTop: 2,
@@ -169,6 +170,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   modalCard: {
+    width: '100%',
+    maxWidth: 620,
+    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
