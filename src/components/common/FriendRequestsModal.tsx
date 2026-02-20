@@ -1,7 +1,8 @@
 import React from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import UserAvatar from './UserAvatar';
 import type { FriendRequestItem } from '../../services/social';
+import { useEscapeClose } from '../../hooks/use-escape-close';
 
 interface FriendRequestsModalProps {
   visible: boolean;
@@ -20,14 +21,16 @@ export default function FriendRequestsModal({
   onAccept,
   onReject,
 }: FriendRequestsModalProps) {
+  useEscapeClose(visible, onClose);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.card, isDark && styles.cardDark]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Solicitudes ({requests.length})</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Text style={styles.closeText}>Cerrar</Text>
+            <TouchableOpacity style={[styles.closeBtn, isDark && styles.closeBtnDark]} onPress={onClose}>
+              <Text style={[styles.closeText, isDark && styles.closeTextDark]}>Cerrar</Text>
             </TouchableOpacity>
           </View>
 
@@ -68,15 +71,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(2, 6, 23, 0.58)',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Platform.OS === 'web' ? 0 : 16,
   },
   card: {
+    width: '100%',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
     padding: 14,
     maxHeight: '78%',
+    alignSelf: 'center',
   },
   cardDark: {
     borderColor: '#1F2937',
@@ -100,10 +105,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: '#FFFFFF',
   },
+  closeBtnDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   closeText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  closeTextDark: {
+    color: '#CBD5E1',
   },
   list: {
     gap: 8,

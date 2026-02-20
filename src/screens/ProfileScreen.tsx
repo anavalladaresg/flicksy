@@ -1,10 +1,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useClerk, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { ActivityIndicator, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useEscapeClose } from '../hooks/use-escape-close';
+import { useGlobalLoader } from '../hooks/useGlobalLoader';
 import UserAvatar from '../components/common/UserAvatar';
 import FriendSectionCard from '../components/common/FriendSectionCard';
 import { type AddFriendSearchResult } from '../components/common/AddFriendModal';
@@ -12,10 +14,11 @@ import FriendRequestsModal from '../components/common/FriendRequestsModal';
 import { gameRepository } from '../features/games/data/repositories';
 import { movieRepository } from '../features/movies/data/repositories';
 import { tvRepository } from '../features/tv/data/repositories';
-import { isSupabaseConfigured, supabase } from '../services/supabase';
+import { isSupabaseConfigured } from '../services/supabase';
 import {
   getFriendsCompatibility,
   getOwnProfile,
+  getOutgoingFriendRequestIds,
   getFriendsList,
   getIncomingFriendRequests,
   isUsernameAvailable,
@@ -31,9 +34,8 @@ import { getAvatarOptions, searchAvatarOptions, type AvatarOption } from '../ser
 import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
-import { sendLocalNotification } from '../services/notifications';
-import { showInAppNotification } from '../services/in-app-notifications';
 import { ACHIEVEMENT_DEFINITIONS } from '../features/achievements/catalog';
+import MagicLoader from '@/components/loaders/MagicLoader';
 
 function averageRating(items: TrackedItem[], type: MediaType): number {
   const filtered = items.filter((item) => item.mediaType === type && typeof item.rating === 'number');
@@ -129,13 +131,12 @@ const PROFILE_DETAILS_LIMIT_NATIVE = 12;
 function ProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
+  const { showLoader, hideLoader } = useGlobalLoader();
   const { signOut } = useClerk();
   const { user } = useUser();
   const username = usePreferencesStore((state) => state.username);
   const themeMode = usePreferencesStore((state) => state.themeMode);
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
-  const alertsFriendRequests = usePreferencesStore((state) => state.alertsFriendRequests);
-  const alertsGoals = usePreferencesStore((state) => state.alertsGoals);
   const monthlyMovieGoal = usePreferencesStore((state) => state.monthlyMovieGoal);
   const monthlyGameGoal = usePreferencesStore((state) => state.monthlyGameGoal);
   const movieGoalPeriod = usePreferencesStore((state) => state.movieGoalPeriod);
@@ -158,7 +159,7 @@ function ProfileScreen() {
   const isCompactProfile = windowWidth < 640;
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const emailAddress = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
-  const computedUsername = (emailAddress.split('@')[0] || username || 'usuario').toLowerCase();
+  const computedUsername = (username || emailAddress.split('@')[0] || 'usuario').toLowerCase();
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || computedUsername;
   const [nameDraft, setNameDraft] = useState(computedUsername);
   const [nameSaving, setNameSaving] = useState(false);
@@ -175,6 +176,8 @@ function ProfileScreen() {
   const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [friendResults, setFriendResults] = useState<FriendProfile[]>([]);
   const [sentFriendRequestIds, setSentFriendRequestIds] = useState<Record<string, true>>({});
+  const [sendingFriendRequestIds, setSendingFriendRequestIds] = useState<Record<string, true>>({});
+  const friendRequestInFlightRef = useRef<Record<string, true>>({});
   const [compatibilityByFriendId, setCompatibilityByFriendId] = useState<Record<string, { compatibility: number; sharedItems: number }>>({});
   const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
   const [friendsCount, setFriendsCount] = useState(0);
@@ -186,6 +189,9 @@ function ProfileScreen() {
   const effectiveAvatarUrl = profileAvatarUrl || storedProfileAvatarUrl || googleAccountImage || null;
   const friendIdsSet = useMemo(() => new Set(friendsList.map((friend) => friend.id)), [friendsList]);
   const profileDetailsLimit = isWeb ? PROFILE_DETAILS_LIMIT_WEB : PROFILE_DETAILS_LIMIT_NATIVE;
+
+  useEscapeClose(isEditNameOpen, () => setIsEditNameOpen(false));
+  useEscapeClose(isEditAvatarOpen, () => setIsEditAvatarOpen(false));
 
   const friendsPreviewData = useMemo(
     () =>
@@ -202,7 +208,13 @@ function ProfileScreen() {
   const friendSearchItems = useMemo<AddFriendSearchResult[]>(
     () =>
       friendResults.map((profile) => {
-        const state = friendIdsSet.has(profile.id) ? 'friend' : sentFriendRequestIds[profile.id] ? 'sent' : 'add';
+        const state = friendIdsSet.has(profile.id)
+          ? 'friend'
+          : sendingFriendRequestIds[profile.id]
+            ? 'sending'
+            : sentFriendRequestIds[profile.id]
+              ? 'sent'
+              : 'add';
         return {
           id: profile.id,
           name: profile.display_name || profile.username,
@@ -211,7 +223,7 @@ function ProfileScreen() {
           state,
         };
       }),
-    [friendResults, friendIdsSet, sentFriendRequestIds]
+    [friendResults, friendIdsSet, sendingFriendRequestIds, sentFriendRequestIds]
   );
 
   const movieIds = useMemo(
@@ -380,11 +392,12 @@ function ProfileScreen() {
   useEffect(() => {
     let cancelled = false;
     const refreshFriendsData = async () => {
-      const [requestsRes, friendsRes, compatibilityRes, ownProfileRes] = await Promise.allSettled([
+      const [requestsRes, friendsRes, compatibilityRes, ownProfileRes, outgoingRes] = await Promise.allSettled([
         getIncomingFriendRequests(),
         getFriendsList(),
         getFriendsCompatibility(),
         getOwnProfile(),
+        getOutgoingFriendRequestIds(),
       ]);
       if (!cancelled) {
         const requests = requestsRes.status === 'fulfilled' ? requestsRes.value : [];
@@ -396,6 +409,10 @@ function ProfileScreen() {
         setIncomingRequests(requests);
         setFriendsList(friends);
         setCompatibilityByFriendId(compatibility);
+        if (outgoingRes.status === 'fulfilled') {
+          const knownSent = Object.fromEntries(outgoingRes.value.map((id) => [id, true])) as Record<string, true>;
+          setSentFriendRequestIds((prev) => ({ ...prev, ...knownSent }));
+        }
 
         const remoteAvatar = ownProfile?.avatar_url ?? null;
         if (remoteAvatar) {
@@ -450,28 +467,17 @@ function ProfileScreen() {
 
       if (!goalPeriodStatuses[keyCurrent] && currentCount >= target) {
         setGoalPeriodStatus(keyCurrent, 'success');
-        if (alertsGoals) {
-          showInAppNotification('success', 'Objetivo cumplido', `Has completado tu objetivo de ${goalType === 'movie' ? 'películas' : 'juegos'}.`);
-        }
       }
 
       if (!goalPeriodStatuses[keyPrevious]) {
         const previousStatus = previousCount >= target ? 'success' : 'fail';
         setGoalPeriodStatus(keyPrevious, previousStatus);
-        if (alertsGoals) {
-          showInAppNotification(
-            previousStatus === 'success' ? 'success' : 'warning',
-            previousStatus === 'success' ? 'Objetivo del periodo anterior cumplido' : 'Objetivo del periodo anterior no cumplido',
-            `${goalType === 'movie' ? 'Películas' : 'Juegos'}: ${previousCount}/${target}`
-          );
-        }
       }
     };
 
     evaluateGoal('movie', monthlyMovieGoal, movieGoalPeriod);
     evaluateGoal('game', monthlyGameGoal, gameGoalPeriod);
   }, [
-    alertsGoals,
     gameGoalPeriod,
     goalPeriodStatuses,
     monthlyGameGoal,
@@ -485,6 +491,7 @@ function ProfileScreen() {
     const next = nameDraft.trim();
     if (!next) return;
     setNameSaving(true);
+    showLoader({ text: 'Guardando perfil...', overlay: true, fullScreen: true, blur: true });
     try {
       const availability = await isUsernameAvailable(next);
       if (!availability.available) {
@@ -493,12 +500,11 @@ function ProfileScreen() {
       }
       setUsername(next);
       await syncOwnProfile(next, { displayName: next, fallbackAvatarUrl: googleAccountImage });
-      if (supabase) {
-        const { error } = await supabase.auth.updateUser({ data: { display_name: next, username: next } });
-        if (error) setFriendMessage('No se pudo guardar en auth, pero quedó en perfil.');
-      }
+      // Este cliente puede estar configurado con accessToken y no soporta auth.updateUser.
+      // Guardamos username en perfil remoto + estado local, que es lo que usa la app.
       setIsEditNameOpen(false);
     } finally {
+      hideLoader();
       setNameSaving(false);
     }
   }
@@ -535,14 +541,32 @@ function ProfileScreen() {
   }, [friendsQuery]);
 
   async function handleAddFriend(userId: string) {
-    const res = await sendFriendRequestByUserId(userId);
-    setFriendMessage(res.message);
-    if (res.ok) {
-      setSentFriendRequestIds((prev) => ({ ...prev, [userId]: true }));
+    if (
+      friendIdsSet.has(userId) ||
+      sentFriendRequestIds[userId] ||
+      sendingFriendRequestIds[userId] ||
+      friendRequestInFlightRef.current[userId]
+    ) {
+      return;
     }
-    if (alertsFriendRequests) {
-      showInAppNotification(res.ok ? 'success' : 'warning', 'Amistades', res.message);
-      await sendLocalNotification('Amistades', res.message);
+    friendRequestInFlightRef.current[userId] = true;
+    setSendingFriendRequestIds((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const res = await sendFriendRequestByUserId(userId);
+      const alreadyActive = /solicitud activa|ya existe una solicitud/i.test(res.message);
+      if (res.ok || alreadyActive) {
+        setSentFriendRequestIds((prev) => ({ ...prev, [userId]: true }));
+        setFriendMessage(res.ok ? res.message : 'Solicitud enviada.');
+      } else {
+        setFriendMessage(res.message);
+      }
+    } finally {
+      delete friendRequestInFlightRef.current[userId];
+      setSendingFriendRequestIds((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
     }
   }
 
@@ -586,41 +610,48 @@ function ProfileScreen() {
   }, [avatarSearchQuery, isEditAvatarOpen]);
 
   async function handleSelectAvatar(nextAvatarUrl: string | null) {
-    const previous = profileAvatarUrl;
-    setProfileAvatarUrl(nextAvatarUrl);
-    setStoredProfileAvatarUrl(nextAvatarUrl);
-    const result = await updateOwnAvatar(nextAvatarUrl);
-    if (result.ok) {
+    showLoader({ text: 'Guardando avatar...', overlay: true, fullScreen: true, blur: true });
+    try {
+      const previous = profileAvatarUrl;
+      setProfileAvatarUrl(nextAvatarUrl);
+      setStoredProfileAvatarUrl(nextAvatarUrl);
+      const result = await updateOwnAvatar(nextAvatarUrl);
+      if (result.ok) {
+        setFriendMessage(result.message);
+        setIsEditAvatarOpen(false);
+        return;
+      }
+      if (result.message.includes('no soporta foto personalizada')) {
+        setFriendMessage('Foto guardada en este dispositivo. Para sincronizar entre dispositivos, añade avatar_url en Supabase.');
+        setIsEditAvatarOpen(false);
+        return;
+      }
+      setProfileAvatarUrl(previous);
+      setStoredProfileAvatarUrl(previous);
       setFriendMessage(result.message);
-      setIsEditAvatarOpen(false);
-      return;
+    } finally {
+      hideLoader();
     }
-    if (result.message.includes('no soporta foto personalizada')) {
-      setFriendMessage('Foto guardada en este dispositivo. Para sincronizar entre dispositivos, añade avatar_url en Supabase.');
-      setIsEditAvatarOpen(false);
-      return;
-    }
-    setProfileAvatarUrl(previous);
-    setStoredProfileAvatarUrl(previous);
-    setFriendMessage(result.message);
   }
 
   async function handleRespondRequest(requestId: string, decision: 'accepted' | 'declined') {
-    const res = await respondFriendRequest(requestId, decision);
-    setFriendMessage(res.message);
-    if (alertsFriendRequests) {
-      showInAppNotification(res.ok ? 'success' : 'warning', 'Solicitudes', res.message);
+    showLoader({ text: 'Actualizando solicitud...', overlay: true, fullScreen: false, blur: false });
+    try {
+      const res = await respondFriendRequest(requestId, decision);
+      setFriendMessage(res.message);
+      const [requestsRes, friendsRes, compatibilityRes] = await Promise.allSettled([
+        getIncomingFriendRequests(),
+        getFriendsList(),
+        getFriendsCompatibility(),
+      ]);
+      const friends = friendsRes.status === 'fulfilled' ? friendsRes.value : [];
+      setFriendsCount(friends.length);
+      setIncomingRequests(requestsRes.status === 'fulfilled' ? requestsRes.value : []);
+      setFriendsList(friends);
+      setCompatibilityByFriendId(compatibilityRes.status === 'fulfilled' ? compatibilityRes.value : {});
+    } finally {
+      hideLoader();
     }
-    const [requestsRes, friendsRes, compatibilityRes] = await Promise.allSettled([
-      getIncomingFriendRequests(),
-      getFriendsList(),
-      getFriendsCompatibility(),
-    ]);
-    const friends = friendsRes.status === 'fulfilled' ? friendsRes.value : [];
-    setFriendsCount(friends.length);
-    setIncomingRequests(requestsRes.status === 'fulfilled' ? requestsRes.value : []);
-    setFriendsList(friends);
-    setCompatibilityByFriendId(compatibilityRes.status === 'fulfilled' ? compatibilityRes.value : {});
   }
 
   return (
@@ -653,7 +684,18 @@ function ProfileScreen() {
             <View style={[styles.profileMainInfo, isCompactProfile && styles.profileMainInfoCompact]}>
               <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Mi perfil</Text>
               <Text style={[styles.username, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{displayName}</Text>
-              <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
+              <View style={styles.usernameRow}>
+                <Text style={[styles.label, { color: isDark ? '#94A3B8' : '#64748B' }]}>@{computedUsername}</Text>
+                <TouchableOpacity
+                  style={[styles.usernameEditBtn, isDark && styles.usernameEditBtnDark]}
+                  onPress={() => {
+                    setNameDraft(computedUsername);
+                    setIsEditNameOpen(true);
+                  }}
+                >
+                  <MaterialIcons name="edit" size={13} color={isDark ? '#BAE6FD' : '#0369A1'} />
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={[styles.profileActionsColumn, isCompactProfile && styles.profileActionsColumnCompact]}>
               <TouchableOpacity
@@ -760,25 +802,25 @@ function ProfileScreen() {
               {`${movieGoalPeriod === 'monthly' ? 'Películas por mes' : 'Películas por semana'}: ${movieGoalProgress}/${monthlyMovieGoal}`}
             </Text>
             <View style={styles.goalControlRow}>
-              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyMovieGoal(Math.max(1, monthlyMovieGoal - 1))}>
-                <Text style={styles.goalAdjustBtnText}>-</Text>
+              <TouchableOpacity style={[styles.goalAdjustBtn, isDark && styles.goalAdjustBtnDark]} onPress={() => setMonthlyMovieGoal(Math.max(1, monthlyMovieGoal - 1))}>
+                <Text style={[styles.goalAdjustBtnText, isDark && styles.goalAdjustBtnTextDark]}>-</Text>
               </TouchableOpacity>
               <Text style={[styles.goalCountText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{monthlyMovieGoal}</Text>
-              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyMovieGoal(Math.min(30, monthlyMovieGoal + 1))}>
-                <Text style={styles.goalAdjustBtnText}>+</Text>
+              <TouchableOpacity style={[styles.goalAdjustBtn, isDark && styles.goalAdjustBtnDark]} onPress={() => setMonthlyMovieGoal(Math.min(30, monthlyMovieGoal + 1))}>
+                <Text style={[styles.goalAdjustBtnText, isDark && styles.goalAdjustBtnTextDark]}>+</Text>
               </TouchableOpacity>
-              <View style={styles.goalPeriodSwitch}>
+              <View style={[styles.goalPeriodSwitch, isDark && styles.goalPeriodSwitchDark]}>
                 <TouchableOpacity
-                  style={[styles.goalPeriodBtn, movieGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
+                  style={[styles.goalPeriodBtn, isDark && styles.goalPeriodBtnDark, movieGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
                   onPress={() => setMovieGoalPeriod('weekly')}
                 >
-                  <Text style={[styles.goalPeriodText, movieGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
+                  <Text style={[styles.goalPeriodText, isDark && styles.goalPeriodTextDark, movieGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.goalPeriodBtn, movieGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
+                  style={[styles.goalPeriodBtn, isDark && styles.goalPeriodBtnDark, movieGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
                   onPress={() => setMovieGoalPeriod('monthly')}
                 >
-                  <Text style={[styles.goalPeriodText, movieGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
+                  <Text style={[styles.goalPeriodText, isDark && styles.goalPeriodTextDark, movieGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -791,25 +833,25 @@ function ProfileScreen() {
               {`${gameGoalPeriod === 'monthly' ? 'Juegos por mes' : 'Juegos por semana'}: ${gameGoalProgress}/${monthlyGameGoal}`}
             </Text>
             <View style={styles.goalControlRow}>
-              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyGameGoal(Math.max(1, monthlyGameGoal - 1))}>
-                <Text style={styles.goalAdjustBtnText}>-</Text>
+              <TouchableOpacity style={[styles.goalAdjustBtn, isDark && styles.goalAdjustBtnDark]} onPress={() => setMonthlyGameGoal(Math.max(1, monthlyGameGoal - 1))}>
+                <Text style={[styles.goalAdjustBtnText, isDark && styles.goalAdjustBtnTextDark]}>-</Text>
               </TouchableOpacity>
               <Text style={[styles.goalCountText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{monthlyGameGoal}</Text>
-              <TouchableOpacity style={styles.goalAdjustBtn} onPress={() => setMonthlyGameGoal(Math.min(20, monthlyGameGoal + 1))}>
-                <Text style={styles.goalAdjustBtnText}>+</Text>
+              <TouchableOpacity style={[styles.goalAdjustBtn, isDark && styles.goalAdjustBtnDark]} onPress={() => setMonthlyGameGoal(Math.min(20, monthlyGameGoal + 1))}>
+                <Text style={[styles.goalAdjustBtnText, isDark && styles.goalAdjustBtnTextDark]}>+</Text>
               </TouchableOpacity>
-              <View style={styles.goalPeriodSwitch}>
+              <View style={[styles.goalPeriodSwitch, isDark && styles.goalPeriodSwitchDark]}>
                 <TouchableOpacity
-                  style={[styles.goalPeriodBtn, gameGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
+                  style={[styles.goalPeriodBtn, isDark && styles.goalPeriodBtnDark, gameGoalPeriod === 'weekly' && styles.goalPeriodBtnActive]}
                   onPress={() => setGameGoalPeriod('weekly')}
                 >
-                  <Text style={[styles.goalPeriodText, gameGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
+                  <Text style={[styles.goalPeriodText, isDark && styles.goalPeriodTextDark, gameGoalPeriod === 'weekly' && styles.goalPeriodTextActive]}>Sem</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.goalPeriodBtn, gameGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
+                  style={[styles.goalPeriodBtn, isDark && styles.goalPeriodBtnDark, gameGoalPeriod === 'monthly' && styles.goalPeriodBtnActive]}
                   onPress={() => setGameGoalPeriod('monthly')}
                 >
-                  <Text style={[styles.goalPeriodText, gameGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
+                  <Text style={[styles.goalPeriodText, isDark && styles.goalPeriodTextDark, gameGoalPeriod === 'monthly' && styles.goalPeriodTextActive]}>Mes</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -906,13 +948,14 @@ function ProfileScreen() {
               style={[styles.modalNameInput, isDark && styles.modalNameInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setIsEditNameOpen(false)}>
-                <Text style={styles.modalCancelText}>Cancelar</Text>
+              <TouchableOpacity style={[styles.modalCancel, isDark && styles.modalCancelDark]} onPress={() => setIsEditNameOpen(false)}>
+                <Text style={[styles.modalCancelText, isDark && styles.modalCancelTextDark]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSave} disabled={nameSaving} onPress={handleSaveUsername}>
                 <Text style={styles.modalSaveText}>{nameSaving ? 'Guardando...' : 'Guardar'}</Text>
               </TouchableOpacity>
             </View>
+            <MagicLoader visible={nameSaving} overlay fullScreen={false} blur text="Guardando..." />
           </View>
         </View>
       </Modal>
@@ -921,21 +964,30 @@ function ProfileScreen() {
           <View style={[styles.avatarModalCard, isDark && styles.cardDark]}>
             <Text style={[styles.blockTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Editar foto de perfil</Text>
             <TouchableOpacity style={[styles.avatarResetBtn, isDark && styles.avatarResetBtnDark]} onPress={() => void handleSelectAvatar(null)}>
-              <Text style={styles.avatarResetText}>Usar foto por defecto</Text>
+              <Text style={[styles.avatarResetText, isDark && styles.avatarResetTextDark]}>Usar foto por defecto</Text>
             </TouchableOpacity>
-            <TextInput
-              value={avatarSearchQuery}
-              onChangeText={setAvatarSearchQuery}
-              placeholder="Buscar peli, serie o juego..."
-              placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
-              style={[styles.avatarSearchInput, isDark && styles.avatarSearchInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-            />
+            <View style={styles.avatarSearchWrap}>
+              <TextInput
+                value={avatarSearchQuery}
+                onChangeText={setAvatarSearchQuery}
+                placeholder="Buscar peli, serie o juego..."
+                placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
+                style={[styles.avatarSearchInput, isDark && styles.avatarSearchInputDark, { color: isDark ? '#E5E7EB' : '#0F172A' }]}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {avatarSearchQuery.length > 0 ? (
+                <TouchableOpacity style={styles.avatarSearchClearButton} onPress={() => setAvatarSearchQuery('')}>
+                  <View style={[styles.avatarSearchClearButtonInner, { backgroundColor: isDark ? '#1F2937' : '#E2E8F0' }]}>
+                    <MaterialIcons name="close" size={14} color={isDark ? '#CBD5E1' : '#334155'} />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+            </View>
             {avatarLoading || avatarSearchLoading ? (
               <View style={styles.avatarLoadingWrap}>
-                <ActivityIndicator size="small" color="#0E7490" />
+                <MagicLoader size={26} color="#0E7490" secondaryColor="#A5F3FC" />
               </View>
             ) : (
               <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
@@ -960,8 +1012,8 @@ function ProfileScreen() {
               </ScrollView>
             )}
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setIsEditAvatarOpen(false)}>
-                <Text style={styles.modalCancelText}>Cerrar</Text>
+              <TouchableOpacity style={[styles.modalCancel, isDark && styles.modalCancelDark]} onPress={() => setIsEditAvatarOpen(false)}>
+                <Text style={[styles.modalCancelText, isDark && styles.modalCancelTextDark]}>Cerrar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1339,11 +1391,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
+  goalAdjustBtnDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   goalAdjustBtnText: {
     color: '#0F172A',
     fontWeight: '800',
     fontSize: 13,
     lineHeight: 15,
+  },
+  goalAdjustBtnTextDark: {
+    color: '#E5E7EB',
   },
   goalCountText: {
     minWidth: 18,
@@ -1359,10 +1418,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
   },
+  goalPeriodSwitchDark: {
+    borderColor: '#334155',
+  },
   goalPeriodBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     backgroundColor: '#FFFFFF',
+  },
+  goalPeriodBtnDark: {
+    backgroundColor: '#0F172A',
   },
   goalPeriodBtnActive: {
     backgroundColor: '#0E7490',
@@ -1371,6 +1436,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
+  },
+  goalPeriodTextDark: {
+    color: '#CBD5E1',
   },
   goalPeriodTextActive: {
     color: '#FFFFFF',
@@ -1482,10 +1550,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#FFFFFF',
   },
+  modalCancelDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
   modalCancelText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  modalCancelTextDark: {
+    color: '#CBD5E1',
   },
   modalSave: {
     borderRadius: 10,
@@ -1515,15 +1590,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarSearchInput: {
-    marginTop: 10,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    paddingRight: 34,
     backgroundColor: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  avatarSearchWrap: {
+    marginTop: 10,
+    position: 'relative',
+  },
+  avatarSearchClearButton: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateY: -11 }],
+  },
+  avatarSearchClearButtonInner: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarSearchInputDark: {
     borderColor: '#334155',
@@ -1574,6 +1671,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
+  },
+  avatarResetTextDark: {
+    color: '#CBD5E1',
   },
   achievementToast: {
     position: 'absolute',

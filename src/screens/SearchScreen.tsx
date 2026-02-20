@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  ActivityIndicator,
   Image,
   Platform,
   SafeAreaView,
@@ -15,6 +14,8 @@ import {
   View,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Fonts } from '@/constants/theme';
+import MagicLoader from '@/components/loaders/MagicLoader';
 import { STORAGE_KEYS, TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useSearchGames } from '../features/games/presentation/hooks';
 import { useSearchMovies } from '../features/movies/presentation/hooks';
@@ -87,6 +88,15 @@ function SearchScreen() {
   const [selectedType, setSelectedType] = useState<SearchType>('all');
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [hoveredResultKey, setHoveredResultKey] = useState<string | null>(null);
+  const [hoveredSuggestKey, setHoveredSuggestKey] = useState<string | null>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -126,13 +136,21 @@ function SearchScreen() {
     }
   }
 
-  function applySuggestedQuery(term: string) {
+  function executeSearch(term: string) {
     const next = term.trim();
     if (!next) return;
-    // Reemplaza lo escrito y ejecuta búsqueda inmediatamente.
     setQuery(next);
     setDebouncedQuery(next);
+    setIsInputFocused(false);
     void saveSearchTerm(next);
+  }
+
+  function applySuggestedQuery(term: string) {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    executeSearch(term);
   }
 
   const primaryQuery = debouncedQuery.trim();
@@ -303,11 +321,26 @@ function SearchScreen() {
     chipBorder: isDark ? '#334155' : '#CBD5E1',
     clearBg: isDark ? '#1F2937' : '#E2E8F0',
     clearIcon: isDark ? '#CBD5E1' : '#334155',
+    rowHover: isDark ? 'rgba(148,163,184,0.16)' : 'rgba(148,163,184,0.18)',
   };
+  const showHistoryBlock = !hasTypedQuery && isInputFocused && searchHistory.length > 0;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}> 
-      <View style={[styles.header, { backgroundColor: palette.background }, isWeb && styles.headerWeb]}> 
+      <View style={[styles.headerWrap, isWeb && { paddingTop: 12 }]}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: palette.background },
+          isWeb && styles.headerWeb,
+          isWeb && styles.headerWebCard,
+          isWeb && {
+            borderColor: isDark ? 'rgba(71,85,105,0.45)' : 'rgba(125,211,252,0.25)',
+            backgroundColor: isDark ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.55)',
+            boxShadow: isDark ? '0 16px 34px rgba(2,6,23,0.35)' : '0 14px 30px rgba(2,6,23,0.08)',
+          },
+        ]}
+      > 
         <Text style={[styles.title, { color: palette.text }]}>Buscar</Text>
         <View style={styles.inputWrap}>
           <TextInput
@@ -325,9 +358,21 @@ function SearchScreen() {
             ]}
             autoCorrect={false}
             autoCapitalize="none"
-            onFocus={() => setIsInputFocused(true)}
-            onBlur={() => setIsInputFocused(false)}
-            onSubmitEditing={() => void saveSearchTerm(query)}
+            onFocus={() => {
+              if (blurTimeoutRef.current) {
+                clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = null;
+              }
+              setIsInputFocused(true);
+            }}
+            onBlur={() => {
+              if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              blurTimeoutRef.current = setTimeout(() => {
+                setIsInputFocused(false);
+                blurTimeoutRef.current = null;
+              }, 120);
+            }}
+            onSubmitEditing={() => executeSearch(query)}
             returnKeyType="search"
           />
           {query.length > 0 && (
@@ -395,17 +440,31 @@ function SearchScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      </View>
 
       {!hasTypedQuery ? (
-        <ScrollView contentContainerStyle={[styles.content, isWeb && styles.contentWeb]} keyboardShouldPersistTaps="handled">
-          {isInputFocused && searchHistory.length > 0 ? (
+        <ScrollView
+          contentContainerStyle={[styles.content, !showHistoryBlock && styles.contentEmpty, isWeb && styles.contentWeb]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {showHistoryBlock ? (
             <View style={[styles.suggestBlock, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}>
               <Text style={[styles.suggestTitle, { color: palette.text }]}>Últimas búsquedas</Text>
               {searchHistory.map((term) => (
                 <TouchableOpacity
                   key={term}
-                  style={styles.suggestRow}
+                  style={[
+                    styles.suggestRow,
+                    hoveredSuggestKey === `history-${term}` && { backgroundColor: palette.rowHover },
+                  ]}
+                  onPressIn={() => applySuggestedQuery(term)}
                   onPress={() => applySuggestedQuery(term)}
+                  {...(isWeb
+                    ? {
+                        onMouseEnter: () => setHoveredSuggestKey(`history-${term}`),
+                        onMouseLeave: () => setHoveredSuggestKey(null),
+                      }
+                    : {})}
                 >
                   <MaterialIcons name="history" size={16} color={palette.subtext} />
                   <Text style={[styles.suggestText, { color: palette.text }]}>{term}</Text>
@@ -413,10 +472,12 @@ function SearchScreen() {
               ))}
             </View>
           ) : null}
-          <View style={styles.centered}>
-            <Text style={[styles.helperText, { color: palette.text }]}>Escribe para buscar todo el catálogo.</Text>
-            <Text style={[styles.helperSubtext, { color: palette.subtext }]}>Si marcas un tipo arriba, filtramos solo por ese tipo.</Text>
-          </View>
+          {!showHistoryBlock ? (
+            <View style={styles.centered}>
+              <Text style={[styles.helperText, { color: palette.text }]}>Escribe para buscar todo el catálogo.</Text>
+              <Text style={[styles.helperSubtext, { color: palette.subtext }]}>Si marcas un tipo arriba, filtramos solo por ese tipo.</Text>
+            </View>
+          ) : null}
         </ScrollView>
       ) : (
         <ScrollView
@@ -430,8 +491,18 @@ function SearchScreen() {
               {completionSuggestions.map((title) => (
                 <TouchableOpacity
                   key={title}
-                  style={styles.suggestRow}
+                  style={[
+                    styles.suggestRow,
+                    hoveredSuggestKey === `suggest-${title}` && { backgroundColor: palette.rowHover },
+                  ]}
+                  onPressIn={() => applySuggestedQuery(title)}
                   onPress={() => applySuggestedQuery(title)}
+                  {...(isWeb
+                    ? {
+                        onMouseEnter: () => setHoveredSuggestKey(`suggest-${title}`),
+                        onMouseLeave: () => setHoveredSuggestKey(null),
+                      }
+                    : {})}
                 >
                   <MaterialIcons name="search" size={16} color={palette.subtext} />
                   <Text style={[styles.suggestText, { color: palette.text }]}>{title}</Text>
@@ -442,7 +513,7 @@ function SearchScreen() {
 
           {isLoading && (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#0E7490" />
+              <MagicLoader size={28} />
               <Text style={[styles.loadingText, { color: palette.text }]}>Buscando...</Text>
             </View>
           )}
@@ -450,12 +521,23 @@ function SearchScreen() {
           {mixedResults.map((item) => (
             <TouchableOpacity
               key={`${item.mediaType}-${item.id}`}
-              style={[styles.item, { backgroundColor: palette.panel, borderColor: palette.panelBorder }]}
+              style={[
+                styles.item,
+                { backgroundColor: palette.panel, borderColor: palette.panelBorder },
+                isWeb && styles.itemWeb,
+                isWeb && hoveredResultKey === `${item.mediaType}-${item.id}` && styles.itemWebHovered,
+              ]}
               activeOpacity={0.75}
               onPress={() => {
                 void saveSearchTerm(query || item.title);
                 router.push(mediaRoute(item));
               }}
+              {...(isWeb
+                ? {
+                    onMouseEnter: () => setHoveredResultKey(`${item.mediaType}-${item.id}`),
+                    onMouseLeave: () => setHoveredResultKey(null),
+                  }
+                : {})}
             >
               <Image
                 source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
@@ -497,15 +579,30 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
   },
+  headerWrap: {
+    zIndex: 2,
+  },
   headerWeb: {
     width: '100%',
     maxWidth: 1160,
     alignSelf: 'center',
   },
+  headerWebCard: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    backdropFilter: 'blur(14px)' as any,
+  },
   title: {
     fontSize: 28,
     fontWeight: '800',
-    marginBottom: 12,
+    marginBottom: 10,
+    letterSpacing: 0.2,
+    ...(Platform.OS === 'web' && {
+      fontFamily: Fonts.web?.serif || "Georgia, 'Times New Roman', serif",
+    }),
   },
   input: {
     borderWidth: 1,
@@ -559,10 +656,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centered: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+    width: '100%',
   },
   helperText: {
     fontSize: 16,
@@ -577,6 +674,11 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+    paddingTop: 6,
+  },
+  contentEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   contentWeb: {
     width: '100%',
@@ -594,9 +696,10 @@ const styles = StyleSheet.create({
   },
   suggestBlock: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 8,
-    marginBottom: 10,
+    marginBottom: 12,
+    boxShadow: '0 10px 20px rgba(2,6,23,0.05)',
   },
   suggestTitle: {
     fontSize: 13,
@@ -623,6 +726,23 @@ const styles = StyleSheet.create({
     padding: 8,
     marginBottom: 8,
     borderWidth: 1,
+  },
+  itemWeb: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 1px 3px rgba(2,6,23,0.04)',
+          transitionDuration: '260ms',
+          transitionProperty: 'box-shadow, opacity',
+          transitionTimingFunction: 'cubic-bezier(0.22,1,0.36,1)',
+        } as any)
+      : null),
+  },
+  itemWebHovered: {
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 8px 16px rgba(2,6,23,0.08)',
+        } as any)
+      : null),
   },
   poster: {
     width: 58,

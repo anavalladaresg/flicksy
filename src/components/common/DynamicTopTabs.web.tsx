@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 type DynamicTopTabsProps = BottomTabBarProps & {
   isDark: boolean;
@@ -22,6 +22,7 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [ripples, setRipples] = useState<Record<string, Ripple[]>>({});
   const rippleId = useRef(0);
+  const sheenAnim = useRef(new Animated.Value(0)).current;
 
   const activeRoute = state.routes[state.index];
   const highlightRouteKey = hoveredKey ?? activeRoute.key;
@@ -48,8 +49,29 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
     }));
   };
 
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(sheenAnim, {
+        toValue: 1,
+        duration: 3600,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      sheenAnim.setValue(0);
+    };
+  }, [sheenAnim]);
+
+  const sheenTranslate = sheenAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-260, 620],
+  });
+
   return (
-    <View style={[styles.wrapper, compact && styles.wrapperCompact, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
+    <View style={[styles.wrapper, compact && styles.wrapperCompact]}>
       <View
         accessibilityRole="tablist"
         style={[
@@ -62,6 +84,17 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
           },
         ]}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.sheen,
+            {
+              opacity: isDark ? 0.18 : 0.12,
+              transform: [{ translateX: sheenTranslate }, { rotate: '14deg' }],
+            },
+          ]}
+        />
+
         {highlightLayout ? (
           <View
             pointerEvents="none"
@@ -180,6 +213,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 6,
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 10,
   },
   wrapperCompact: {
     paddingHorizontal: 8,
@@ -197,6 +232,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+    backdropFilter: 'blur(16px)' as any,
   },
   containerCompact: {
     width: '100%',
@@ -258,6 +294,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     opacity: 0.3,
     transform: [{ scale: 1 }],
+  },
+  sheen: {
+    position: 'absolute',
+    top: -16,
+    bottom: -16,
+    width: 180,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    zIndex: 0,
   },
 });
 

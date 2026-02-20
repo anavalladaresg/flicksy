@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TFG - Flicksy</title>
+  <style>
+    :root {
+      --ink: #1b2631;
+      --muted: #5d6d7e;
+      --line: #d6dde5;
+      --paper: #ffffff;
+      --accent: #0e7490;
+      --soft: #f6f8fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f1f4f8;
+      color: var(--ink);
+      font-family: "Source Serif 4", "Georgia", "Times New Roman", serif;
+      line-height: 1.55;
+    }
+    .sheet {
+      width: min(1100px, 94vw);
+      margin: 24px auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      padding: 44px 52px;
+    }
+    h1, h2, h3, h4 {
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    h2 { font-size: 1.4rem; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    h3 { font-size: 1.07rem; margin: 18px 0 8px; }
+    h4 { font-size: 0.98rem; margin: 14px 0 8px; }
+    p { margin: 8px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .muted { color: var(--muted); }
+    .cover {
+      min-height: 72vh;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      gap: 8px;
+    }
+    .cover .title { font-size: 2.2rem; font-weight: 800; letter-spacing: .02em; }
+    .cover .subtitle { font-size: 1.05rem; color: var(--muted); }
+    .cover .meta { margin-top: 18px; }
+    .toc {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .toc ol { margin: 8px 0 0 20px; }
+    .toc li { margin: 5px 0; }
+    ul, ol { margin: 8px 0 8px 22px; }
+    li { margin: 3px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      vertical-align: top;
+    }
+    th {
+      background: #eef3f8;
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
+      text-align: left;
+      font-weight: 700;
+    }
+    code {
+      background: #f2f5f8;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: .88em;
+    }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: .84rem;
+      line-height: 1.42;
+      border: 1px solid #1e293b;
+    }
+    blockquote {
+      margin: 12px 0;
+      border-left: 4px solid #a5b4c8;
+      padding: 8px 12px;
+      background: #f8fafc;
+      color: #334155;
+    }
+    .pill {
+      display: inline-block;
+      border: 1px solid #99d6e3;
+      background: #ecfeff;
+      color: #0f766e;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 0.82rem;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+      margin-top: 34px;
+      border-top: 2px dashed #e2e8f0;
+      padding-top: 14px;
+    }
+    .note {
+      border: 1px solid #facc15;
+      background: #fefce8;
+      color: #854d0e;
+      padding: 9px 12px;
+      border-radius: 8px;
+      margin: 10px 0;
+      font-size: .94rem;
+    }
+    @media print {
+      body { background: #fff; }
+      .sheet {
+        width: 100%;
+        margin: 0;
+        border: none;
+        box-shadow: none;
+        padding: 18mm 16mm;
+      }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <section id="1-portada" class="cover">
+      <div class="title">Memoria TFG - Flicksy</div>
+      <div class="subtitle">Analisis, diseno e implementacion de una app multimedia social multiplataforma</div>
+      <div class="meta">
+        <p><strong>Titulo:</strong> &lt;&lt;DISENO E IMPLEMENTACION DE FLICKSY: PLATAFORMA MULTIMEDIA SOCIAL PARA PELICULAS, SERIES Y VIDEOJUEGOS&gt;&gt;</p>
+        <p><strong>Proyecto:</strong> Flicksy (fuentes: <code>app.json</code>, <code>README.md</code>)</p>
+        <p><strong>Tipo:</strong> &lt;&lt;APP MOVIL MULTIPLATAFORMA CON SOPORTE WEB (FRONTEND CLIENT + BaaS)&gt;&gt;</p>
+        <p><strong>Autor/a:</strong> &lt;&lt;TU_NOMBRE&gt;&gt; · <strong>Tutor/a:</strong> &lt;&lt;TUTOR&gt;&gt;</p>
+        <p><strong>Grado:</strong> &lt;&lt;GRADO&gt;&gt; · <strong>Universidad:</strong> &lt;&lt;UNIVERSIDAD&gt;&gt;</p>
+        <p><strong>Curso:</strong> &lt;&lt;2025-2026&gt;&gt; · <strong>Fecha:</strong> &lt;&lt;FECHA&gt;&gt;</p>
+      </div>
+    </section>
+
+    <section id="0-indice" class="page-break">
+      <h2>0. Indice</h2>
+      <div class="toc">
+        <ol>
+          <li><a href="#1-portada">Portada</a></li>
+          <li><a href="#2-resumen-es-y-abstract-en">Resumen (ES) y Abstract (EN)</a></li>
+          <li><a href="#3-introduccion">Introduccion</a></li>
+          <li><a href="#4-estado-del-arte-y-contexto">Estado del arte y contexto</a></li>
+          <li><a href="#5-requisitos">Requisitos</a></li>
+          <li><a href="#6-analisis-y-diseno">Analisis y diseno</a></li>
+          <li><a href="#7-implementacion">Implementacion</a></li>
+          <li><a href="#8-experiencia-de-usuario-y-diseno-visual">Experiencia de usuario y diseno visual</a></li>
+          <li><a href="#9-pruebas-y-calidad">Pruebas y calidad</a></li>
+          <li><a href="#10-despliegue-y-operacion">Despliegue y operacion</a></li>
+          <li><a href="#11-resultados-y-evaluacion">Resultados y evaluacion</a></li>
+          <li><a href="#12-conclusiones">Conclusiones</a></li>
+          <li><a href="#13-trabajo-futuro">Trabajo futuro</a></li>
+          <li><a href="#14-bibliografia">Bibliografia</a></li>
+          <li><a href="#15-anexos">Anexos</a></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="2-resumen-es-y-abstract-en" class="page-break">
+      <h2>2. Resumen (ES) y Abstract (EN)</h2>
+      <h3>2.1 Resumen (ES)</h3>
+      <p>Flicksy es una aplicacion orientada al seguimiento personal y social de peliculas, series y videojuegos. El repositorio implementa una arquitectura modular por features, integra autenticacion externa, persistencia local/remota, y consumo de APIs de catalogo (TMDb e IGDB), con una capa social sobre Supabase.</p>
+      <p>La solucion se construye con Expo/React Native y soporte web mediante Expo Router. React Query gestiona cache y sincronizacion, mientras Zustand mantiene estado global persistente. Clerk resuelve autenticacion y Supabase opera como backend social y de biblioteca.</p>
+      <p>La revision completa confirma una base funcional avanzada, pero tambien evidencia deuda de calidad: errores activos de TypeScript estricto, tests no ejecutables en estado actual, ausencia de migraciones SQL en repo y falta de pipeline CI/CD formal.</p>
+
+      <h3>2.2 Abstract (EN)</h3>
+      <p>Flicksy is a multi-platform social tracking app for movies, TV shows, and video games. The repository implements a feature-based architecture with external authentication, local/remote persistence, and third-party catalog integrations (TMDb, IGDB).</p>
+      <p>The stack uses Expo/React Native, Expo Router, React Query, Zustand, Clerk, and Supabase. The codebase delivers core product flows (discovery, search, library, profile analytics, goals, achievements, and social interactions) while still lacking production-grade engineering controls in typing, testing, schema versioning, and CI/CD.</p>
+
+      <h3>2.3 Palabras clave</h3>
+      <p>
+        <span class="pill">Expo</span>
+        <span class="pill">React Native</span>
+        <span class="pill">Expo Router</span>
+        <span class="pill">TypeScript</span>
+        <span class="pill">React Query</span>
+        <span class="pill">Zustand</span>
+        <span class="pill">Supabase</span>
+        <span class="pill">Clerk</span>
+        <span class="pill">TMDb</span>
+        <span class="pill">IGDB</span>
+      </p>
+    </section>
+
+    <section id="3-introduccion" class="page-break">
+      <h2>3. Introduccion</h2>
+      <h3>3.1 Motivacion academica y de producto</h3>
+      <p>Flicksy aborda una friccion cotidiana: el consumo digital es transversal (cine, series, juegos), pero el seguimiento suele hacerse en apps distintas. El proyecto propone unificar descubrimiento, memoria personal, componente social y gamificacion en un unico sistema.</p>
+      <p>La motivacion se verifica en el repositorio mediante tres dominios funcionales (<code>src/features/movies</code>, <code>src/features/tv</code>, <code>src/features/games</code>), una biblioteca transversal (<code>src/store/tracking.ts</code>) y social integrado (<code>src/services/social.ts</code>).</p>
+
+      <h3>3.2 Problema a resolver</h3>
+      <ol>
+        <li>Reducir fragmentacion funcional entre verticales de contenido.</li>
+        <li>Mejorar descubrimiento contextualizado por historial real.</li>
+        <li>Integrar social accionable (solicitudes, compatibilidad, actividad, ratings de amistades).</li>
+        <li>Aumentar calidad del tracking con estados y fechas detalladas.</li>
+      </ol>
+
+      <h3>3.3 Objetivos</h3>
+      <p><strong>Objetivo general:</strong> disenar e implementar una app multiplataforma para seguimiento y comparticion de progreso multimedia personal (peliculas, series y videojuegos), con catalogo externo y persistencia local-remota.</p>
+      <p><strong>Objetivos especificos:</strong> integrar TMDb/IGDB, asegurar autenticacion y sesion, construir biblioteca sincronizada, habilitar social completo y gamificacion por objetivos/logros.</p>
+
+      <h3>3.4 Alcance y limitaciones</h3>
+      <p><strong>Alcance:</strong> flujos principales implementados en <code>src/screens</code>, stores persistentes (<code>src/store</code>) y servicios externos (<code>src/services</code>).</p>
+      <p><strong>Limitaciones:</strong> sin migraciones SQL en repo, sin CI/CD versionado, tests parciales/desactualizados, documentacion prometida en README pero no presente.</p>
+
+      <h3>3.5 Hipotesis de valor</h3>
+      <p>Inferencia razonada: si el usuario centraliza en un solo producto su actividad multimedia con apoyo social y metas de progreso, aumenta la recurrencia de uso frente a soluciones aisladas por vertical.</p>
+    </section>
+
+    <section id="4-estado-del-arte-y-contexto" class="page-break">
+      <h2>4. Estado del arte y contexto</h2>
+      <h3>4.1 Panorama de mercado (fuentes externas)</h3>
+      <table>
+        <thead>
+          <tr><th>Indicador</th><th>Dato</th><th>Lectura para Flicksy</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Video bajo demanda en Espana</td><td>62.1% de internautas en el ultimo mes (CNMC, junio 2025) [11]</td><td>Mercado base maduro para herramientas de tracking.</td></tr>
+          <tr><td>Penetracion 16-34</td><td>90.4% (CNMC, junio 2025) [11]</td><td>Segmento objetivo con alta afinidad digital.</td></tr>
+          <tr><td>Friccion para elegir contenido</td><td>47% reporta frustracion (Deloitte 2025) [12]</td><td>Justifica recomendacion y curacion en app.</td></tr>
+          <tr><td>Descubrimiento social</td><td>48% usa social media para recomendaciones (Deloitte 2025) [12]</td><td>Valida incorporar feed y contexto social propio.</td></tr>
+          <tr><td>Escala gaming global</td><td>3.42B jugadores y 188.9B USD (2024) (Newzoo) [13]</td><td>El dominio juegos debe ser core del producto.</td></tr>
+          <tr><td>Peso del videojuego</td><td>224B USD (2024), superior a cine+musica (PwC/GEMA) [14]</td><td>Refuerza enfoque multimedia integral.</td></tr>
+          <tr><td>Streaming en TV (EE. UU.)</td><td>44.8% del uso total de TV (Nielsen, mayo 2025) [15]</td><td>Consumo bajo demanda consolidado.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4.2 Benchmark funcional (inferencia razonada)</h3>
+      <table>
+        <thead>
+          <tr><th>Criterio</th><th>Soluciones especializadas (mercado)</th><th>Flicksy (repo analizado)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Cobertura multimedia</td><td>Frecuentemente parcial</td><td>Unificada: <code>movie</code>, <code>tv</code>, <code>game</code> (<code>src/types/index.ts</code>)</td></tr>
+          <tr><td>Plataformas</td><td>Variable</td><td>iOS/Android/Web (<code>package.json</code>, <code>app.json</code>)</td></tr>
+          <tr><td>Busqueda multi-fuente</td><td>Variable</td><td>Si, con normalizacion y dedupe (<code>src/screens/SearchScreen.tsx</code>)</td></tr>
+          <tr><td>Capa social</td><td>Dependiente del producto</td><td>Solicitudes, amistades, actividad, compatibilidad (<code>src/services/social.ts</code>)</td></tr>
+          <tr><td>Gamificacion</td><td>No universal</td><td>Objetivos y logros (<code>src/features/achievements/catalog.ts</code>)</td></tr>
+          <tr><td>Versionado backend</td><td>Habitual en productos maduros</td><td>No visible (sin migraciones en repo)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4.3 Necesidad especifica que cubre Flicksy</h3>
+      <p>La propuesta de valor del proyecto no es solo registrar contenido, sino consolidar identidad de consumo, decisiones de descubrimiento y contexto social en una unica experiencia de producto.</p>
+      <div class="note">Inferencia razonada: el posicionamiento se deduce del conjunto de flujos implementados (home, search, tracked, profile y social).</div>
+    </section>
+
+    <section id="5-requisitos" class="page-break">
+      <h2>5. Requisitos</h2>
+
+      <h3>5.1 Requisitos funcionales (resumen)</h3>
+      <ol>
+        <li>Autenticacion por Google/email y proteccion de rutas privadas.</li>
+        <li>Descubrimiento, busqueda global y detalle multimedia.</li>
+        <li>CRUD de biblioteca con estado/rating/fechas.</li>
+        <li>Sincronizacion local-remota con Supabase.</li>
+        <li>Modulo social: busqueda de perfiles, solicitudes, amistades, compatibilidad, actividad.</li>
+        <li>Perfil analitico con metas y logros.</li>
+      </ol>
+
+      <h3>5.2 Requisitos no funcionales</h3>
+      <table>
+        <thead>
+          <tr><th>Categoria</th><th>Estado actual</th><th>Evidencia</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Rendimiento</td><td>Cache reactiva + reintentos</td><td><code>src/providers/QueryProvider.tsx</code></td></tr>
+          <tr><td>Mantenibilidad</td><td>Arquitectura por features</td><td><code>src/features/*</code></td></tr>
+          <tr><td>Seguridad</td><td>Variables de entorno y auth externa</td><td><code>src/services/*.ts</code>, <code>app/_layout.tsx</code></td></tr>
+          <tr><td>Escalabilidad</td><td>Modular por dominio</td><td><code>src/features/movies|tv|games</code></td></tr>
+          <tr><td>Calidad</td><td>Tipo estricto declarado pero no estabilizado</td><td><code>tsconfig.json</code> + salida <code>npm run type-check</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.3 Historias de usuario (12)</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Historia</th></tr></thead>
+        <tbody>
+          <tr><td>HU-01</td><td>Como usuario nuevo, quiero registrarme por Google o email para empezar rapido.</td></tr>
+          <tr><td>HU-02</td><td>Como usuario, quiero ver tendencias de peliculas, series y juegos.</td></tr>
+          <tr><td>HU-03</td><td>Como usuario, quiero buscar titulos sin depender de tildes.</td></tr>
+          <tr><td>HU-04</td><td>Como usuario, quiero guardar contenido en mi biblioteca.</td></tr>
+          <tr><td>HU-05</td><td>Como usuario, quiero valorar y marcar estado de cada item.</td></tr>
+          <tr><td>HU-06</td><td>Como usuario, quiero registrar fechas exactas o aproximadas.</td></tr>
+          <tr><td>HU-07</td><td>Como usuario, quiero editar o eliminar items guardados.</td></tr>
+          <tr><td>HU-08</td><td>Como usuario, quiero enviar solicitudes de amistad.</td></tr>
+          <tr><td>HU-09</td><td>Como usuario, quiero aceptar o rechazar solicitudes recibidas.</td></tr>
+          <tr><td>HU-10</td><td>Como usuario, quiero ver actividad y compatibilidad con amistades.</td></tr>
+          <tr><td>HU-11</td><td>Como usuario, quiero consultar bibliotecas de amistades.</td></tr>
+          <tr><td>HU-12</td><td>Como usuario, quiero objetivos/logros para gamificar mi progreso.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="6-analisis-y-diseno" class="page-break">
+      <h2>6. Analisis y diseno</h2>
+
+      <h3>6.1 Arquitectura general</h3>
+      <pre>Usuario -> Expo Router (app/) -> Screens (src/screens)
+Screens -> Hooks presentation -> Repositories data -> HTTP clients
+HTTP -> TMDb / IGDB (web via /api/igdb)
+Screens -> Zustand stores (tracking/preferences) -> AsyncStorage + Supabase
+Auth -> Clerk -> sync perfil en Supabase</pre>
+
+      <h3>6.2 Flujo de autenticacion</h3>
+      <pre>Login (Clerk) -> use-auth-status -> syncOwnProfile (Supabase)
+-> bootstrapRemote (tracking store) -> hidratacion de biblioteca</pre>
+
+      <h3>6.3 Modelo de datos (inferido)</h3>
+      <div class="note">Inferencia razonada: no hay migraciones SQL versionadas en el repositorio.</div>
+      <table>
+        <thead><tr><th>Tabla</th><th>Campos observables</th><th>Fuente</th></tr></thead>
+        <tbody>
+          <tr><td><code>profiles</code></td><td><code>id</code>, <code>username</code>, <code>display_name</code>, <code>avatar_url</code>, <code>expo_push_token</code>, <code>updated_at</code></td><td><code>src/services/social.ts</code></td></tr>
+          <tr><td><code>friend_requests</code></td><td><code>id</code>, <code>from_user_id</code>, <code>to_user_id</code>, <code>status</code>, <code>created_at</code></td><td><code>src/services/social.ts</code></td></tr>
+          <tr><td><code>friends</code></td><td><code>user_id</code>, <code>friend_id</code></td><td><code>src/services/social.ts</code></td></tr>
+          <tr><td><code>library_items</code></td><td>ids, tipo media, estado, rating, fechas, metadatos extendidos</td><td><code>src/store/tracking.ts</code>, <code>src/services/social.ts</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.4 APIs internas/externas</h3>
+      <table>
+        <thead><tr><th>Origen</th><th>Uso</th><th>Evidencia</th></tr></thead>
+        <tbody>
+          <tr><td>TMDb</td><td>Catalogo y detalle de peliculas/series</td><td><code>src/features/movies|tv/data/repositories.ts</code></td></tr>
+          <tr><td>IGDB</td><td>Catalogo y detalle de juegos (Apicalypse)</td><td><code>src/features/games/data/repositories.ts</code></td></tr>
+          <tr><td>Proxy IGDB</td><td>Seguridad en web / CORS</td><td><code>api/igdb/[...path].ts</code></td></tr>
+          <tr><td>Supabase</td><td>Social, biblioteca y realtime</td><td><code>src/services/social.ts</code>, <code>app/(tabs)/_layout.tsx</code></td></tr>
+          <tr><td>Clerk</td><td>Autenticacion y sesion</td><td><code>app/_layout.tsx</code>, <code>src/screens/AuthScreen.*</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.5 Decisiones tecnicas clave</h3>
+      <table>
+        <thead><tr><th>Decision</th><th>Razon</th><th>Fuente</th></tr></thead>
+        <tbody>
+          <tr><td>Expo Router</td><td>File-based routing multiplataforma</td><td><code>app/</code></td></tr>
+          <tr><td>React Query</td><td>Cache + sincronizacion + retries</td><td><code>src/providers/QueryProvider.tsx</code></td></tr>
+          <tr><td>Zustand persist</td><td>Estado global simple y rapido</td><td><code>src/store/*.ts</code></td></tr>
+          <tr><td>Clerk + Supabase</td><td>Auth external + backend social</td><td><code>src/services/clerk.ts</code>, <code>src/services/supabase.ts</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="7-implementacion" class="page-break">
+      <h2>7. Implementacion</h2>
+
+      <h3>7.1 Estructura modular por capas</h3>
+      <p>La implementacion separa rutas (<code>app/</code>), pantallas (<code>src/screens</code>), features por dominio (<code>src/features/*</code>) y servicios transversales (<code>src/services</code>).</p>
+
+      <h3>7.2 Flujos principales</h3>
+      <h4>7.2.1 Auth y sesion</h4>
+      <ul>
+        <li>Native: Google SSO, email/password, verificacion por codigo y segundo factor email cuando aplica.</li>
+        <li>Web: flujo SignIn/SignUp de Clerk con apariencia personalizada.</li>
+        <li>Post-login: sincronizacion de perfil en Supabase y bootstrap remoto de biblioteca.</li>
+        <li>Proteccion de rutas privadas en layout de tabs.</li>
+      </ul>
+
+      <h4>7.2.2 Home y recomendacion</h4>
+      <ul>
+        <li>Carga simultanea de catalogos (peliculas/series/juegos) y composicion por secciones.</li>
+        <li>Recomendador local basado en historial, rating y estado con dos carriles (<em>safe</em> y <em>discovery</em>).</li>
+        <li>Persistencia de descartes de recomendaciones para evitar repeticion.</li>
+        <li>Feed de actividad de amistades como capa social de descubrimiento.</li>
+      </ul>
+
+      <h4>7.2.3 Search global</h4>
+      <ul>
+        <li>Debounce de entrada y normalizacion diacritica para mejorar recuperacion.</li>
+        <li>Consultas paralelas por dominio, deduplicacion y ranking por popularidad/rating.</li>
+        <li>Sugerencias y autocompletado combinando resultados API con historial local.</li>
+      </ul>
+
+      <h4>7.2.4 Biblioteca (Tracked)</h4>
+      <ul>
+        <li>CRUD local con persistencia y sincronizacion remota best effort a <code>library_items</code>.</li>
+        <li>Fallback de esquema remoto (payload minimo) ante columnas ausentes.</li>
+        <li>Edicion avanzada por estado/rating/fechas exactas-no exactas con validacion temporal.</li>
+      </ul>
+
+      <h4>7.2.5 Social y perfil</h4>
+      <ul>
+        <li>Busqueda de perfiles, solicitudes, aceptacion/rechazo y lista de amistades.</li>
+        <li>Compatibilidad por items compartidos y diferencia de ratings.</li>
+        <li>Consumo de bibliotecas de amistades y ratings por item en pantallas de detalle.</li>
+        <li>Dashboard de perfil con horas estimadas, racha, objetivos y logros.</li>
+      </ul>
+
+      <h4>7.2.6 Detalle por media</h4>
+      <ul>
+        <li>Peliculas/series: trailer, proveedores de streaming por region y tracking contextual.</li>
+        <li>Juegos: plataformas, estudio, capturas y seguimiento por estado de progreso.</li>
+      </ul>
+
+      <h3>7.3 Integracion de APIs</h3>
+      <table>
+        <thead><tr><th>API</th><th>Endpoints/operaciones</th><th>Auth</th><th>Manejo de errores</th></tr></thead>
+        <tbody>
+          <tr><td>TMDb</td><td><code>/movie/*</code>, <code>/tv/*</code>, <code>/discover/*</code>, <code>/search/*</code></td><td><code>api_key</code> en interceptor</td><td><code>handleApiError</code> + React Query</td></tr>
+          <tr><td>IGDB</td><td><code>POST /games</code> (queries Apicalypse)</td><td><code>Client-ID</code> + Bearer / proxy web</td><td>Backoff web + empty fallback</td></tr>
+          <tr><td>Supabase</td><td>CRUD social/biblioteca + realtime</td><td>Token Clerk inyectado</td><td>Warn logs y degradacion</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.4 Seguridad</h3>
+      <ul>
+        <li>Uso sistematico de variables de entorno.</li>
+        <li>Proxy web IGDB para no exponer claves en browser.</li>
+        <li>CORS abierto en proxy (<code>*</code>) como punto a endurecer.</li>
+        <li>Sin evidencia versionada de RLS/policies en repo (riesgo de gobierno de datos).</li>
+      </ul>
+
+      <h3>7.5 Observabilidad</h3>
+      <p>Actualmente se basa en logs <code>console.warn/error</code> y flag <code>EXPO_PUBLIC_DEBUG_IGDB</code>; no hay stack de trazas ni metricas persistentes.</p>
+
+      <h3>7.6 Mapa funcional (pantalla -> valor)</h3>
+      <table>
+        <thead><tr><th>Pantalla/modulo</th><th>Valor principal</th><th>Evidencia</th></tr></thead>
+        <tbody>
+          <tr><td>Auth</td><td>Entrada segura y rapida</td><td><code>src/screens/AuthScreen.native.tsx</code>, <code>src/screens/AuthScreen.web.tsx</code></td></tr>
+          <tr><td>Home</td><td>Descubrimiento + recomendacion + actividad social</td><td><code>src/screens/HomeScreen.tsx</code>, <code>src/services/social.ts</code></td></tr>
+          <tr><td>Search</td><td>Busqueda transversal de baja friccion</td><td><code>src/screens/SearchScreen.tsx</code></td></tr>
+          <tr><td>Tracked</td><td>Memoria personal y edicion de progreso</td><td><code>src/screens/TrackedScreen.tsx</code>, <code>src/store/tracking.ts</code></td></tr>
+          <tr><td>Profile</td><td>Analitica personal + metas + logros</td><td><code>src/screens/ProfileScreen.tsx</code>, <code>src/features/achievements/catalog.ts</code></td></tr>
+          <tr><td>Friends/Friend Library</td><td>Contexto social accionable</td><td><code>src/screens/FriendsScreen.tsx</code>, <code>src/screens/FriendLibraryScreen.tsx</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="8-experiencia-de-usuario-y-diseno-visual" class="page-break">
+      <h2>8. Experiencia de usuario y diseno visual</h2>
+      <h3>8.1 Principios UI/UX</h3>
+      <ul>
+        <li>UI visualmente expresiva en web (gradientes, motion, overlays, modales flotantes).</li>
+        <li>Navegacion centrada en 4 tabs y detalle modal para rapidez.</li>
+        <li>Feedback continuo con toasts y estados de carga/error.</li>
+      </ul>
+
+      <h3>8.2 Componentes y navegacion</h3>
+      <p>Componentes clave: <code>DynamicTopTabs.web.tsx</code>, <code>RatingPickerModal.tsx</code>, <code>CalendarInput.tsx</code>, <code>FriendSectionCard.tsx</code>, <code>AppToaster.web.tsx</code>.</p>
+
+      <h3>8.3 Accesibilidad</h3>
+      <p>Estado actual razonable en contraste y tamanos, pero con dependencia de hover/rueda en algunas vistas web. Se recomienda reforzar teclado, foco visible y atributos ARIA.</p>
+    </section>
+
+    <section id="9-pruebas-y-calidad" class="page-break">
+      <h2>9. Pruebas y calidad</h2>
+
+      <h3>9.1 Estado actual</h3>
+      <table>
+        <thead><tr><th>Control</th><th>Resultado de esta revision</th></tr></thead>
+        <tbody>
+          <tr><td><code>npm run lint</code></td><td>Ejecuta sin errores reportados</td></tr>
+          <tr><td><code>npm run type-check</code></td><td>Falla con numerosos errores TS (implicit any, tipos web, imports de Zustand, etc.)</td></tr>
+          <tr><td><code>npm test -- --runInBand</code></td><td>Falla por Watchman en sandbox</td></tr>
+          <tr><td><code>npx jest --runInBand --watchman=false</code></td><td>Falla por parseo ESM de <code>expo-modules-core</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>9.2 Gaps relevantes</h3>
+      <ul>
+        <li>Desajuste test-codigo en movies repository (<code>append_to_response</code> esperado vs actual).</li>
+        <li>Suite de componentes con casos incompletos.</li>
+        <li>E2E totalmente comentado (<code>tests/e2e/home.e2e.ts</code>).</li>
+        <li>Sin CI/CD para bloquear regresiones.</li>
+      </ul>
+
+      <h3>9.3 Plan de cobertura</h3>
+      <ol>
+        <li>Estabilizar entorno Jest/Expo.</li>
+        <li>Actualizar unit tests existentes y ampliar social/tracking.</li>
+        <li>Anadir integracion con mocks Supabase/Clerk.</li>
+        <li>Habilitar E2E real para 4 journeys criticos.</li>
+        <li>Imponer umbral minimo en CI.</li>
+      </ol>
+    </section>
+
+    <section id="10-despliegue-y-operacion" class="page-break">
+      <h2>10. Despliegue y operacion</h2>
+
+      <h3>10.1 Entornos</h3>
+      <ul>
+        <li><strong>Desarrollo:</strong> Expo local + proxy IGDB opcional (<code>scripts/igdb-proxy.js</code>).</li>
+        <li><strong>Web:</strong> build estatico + Vercel (<code>vercel.json</code>).</li>
+        <li><strong>Stage/prod:</strong> no explicitos en codigo (inferencia razonada).</li>
+      </ul>
+
+      <h3>10.2 Variables de entorno</h3>
+      <table>
+        <thead><tr><th>Variable</th><th>Uso</th></tr></thead>
+        <tbody>
+          <tr><td><code>EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY</code></td><td>Autenticacion Clerk</td></tr>
+          <tr><td><code>EXPO_PUBLIC_SUPABASE_URL</code>, <code>EXPO_PUBLIC_SUPABASE_ANON_KEY</code></td><td>Cliente Supabase</td></tr>
+          <tr><td><code>EXPO_PUBLIC_TMDB_API_KEY</code></td><td>TMDb</td></tr>
+          <tr><td><code>EXPO_PUBLIC_IGDB_CLIENT_ID</code>, <code>EXPO_PUBLIC_IGDB_ACCESS_TOKEN</code></td><td>IGDB en cliente/native</td></tr>
+          <tr><td><code>IGDB_CLIENT_ID</code>, <code>IGDB_ACCESS_TOKEN</code></td><td>Proxy serverless/local IGDB</td></tr>
+        </tbody>
+      </table>
+
+      <h3>10.3 CI/CD</h3>
+      <p>No se observan workflows en <code>.github/</code>. Se recomienda pipeline minimo: install, lint, type-check, test, export web.</p>
+
+      <h3>10.4 Costes (inferencia razonada)</h3>
+      <p>Arranque viable en tiers gratuitos: Vercel Hobby, Supabase Free, Clerk Free, Expo free tooling, APIs developer.</p>
+    </section>
+
+    <section id="11-resultados-y-evaluacion" class="page-break">
+      <h2>11. Resultados y evaluacion</h2>
+      <table>
+        <thead><tr><th>Objetivo</th><th>Estado</th><th>Comentario</th></tr></thead>
+        <tbody>
+          <tr><td>Unificacion multimedia</td><td>Cumplido</td><td>Modelo y pantallas para <code>movie/tv/game</code></td></tr>
+          <tr><td>Social integrado</td><td>Cumplido</td><td>Solicitudes, amigos, compatibilidad, actividad</td></tr>
+          <tr><td>Metas y logros</td><td>Cumplido</td><td>Motor de evaluacion y UI dedicadas</td></tr>
+          <tr><td>Calidad productiva</td><td>Parcial</td><td>Tipado/tests/CI aun no estabilizados</td></tr>
+        </tbody>
+      </table>
+
+      <h3>11.2 Limitaciones</h3>
+      <ul>
+        <li>Sin versionado de esquema backend en repo.</li>
+        <li>Errores activos de type-check.</li>
+        <li>Testing no fiable en estado actual.</li>
+        <li>Documentacion auxiliar faltante respecto a README.</li>
+      </ul>
+
+      <h3>11.3 Riesgos y mitigaciones</h3>
+      <table>
+        <thead><tr><th>Riesgo</th><th>Mitigacion</th></tr></thead>
+        <tbody>
+          <tr><td>Cambios de DB sin trazabilidad</td><td>Migraciones SQL + politicas versionadas</td></tr>
+          <tr><td>Regresiones por falta de CI</td><td>Pipeline obligatorio con checks de calidad</td></tr>
+          <tr><td>Credenciales/seguridad proxy</td><td>Hardening CORS y validaciones en endpoint</td></tr>
+          <tr><td>Baja observabilidad</td><td>Telemetria estructurada y alertado</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="12-conclusiones" class="page-break">
+      <h2>12. Conclusiones</h2>
+      <p>Flicksy presenta una solucion funcional y diferenciada para tracking multimedia social, con una base tecnica moderna y una UX trabajada. Desde perspectiva de ingenieria, el proyecto necesita una fase de endurecimiento para consolidar calidad, trazabilidad y operacion a escala.</p>
+      <p>El potencial del producto es alto; el principal cuello de botella actual no es de funcionalidad sino de disciplina de calidad (tipado, pruebas, CI/CD, versionado backend).</p>
+    </section>
+
+    <section id="13-trabajo-futuro" class="page-break">
+      <h2>13. Trabajo futuro</h2>
+      <table>
+        <thead><tr><th>Prioridad</th><th>Accion</th><th>Impacto</th></tr></thead>
+        <tbody>
+          <tr><td>P0</td><td>Corregir <code>npm run type-check</code> hasta 0 errores</td><td>Base estable</td></tr>
+          <tr><td>P0</td><td>Reparar toolchain Jest/Expo y actualizar suites desfasadas</td><td>Confianza tecnica</td></tr>
+          <tr><td>P0</td><td>Versionar migraciones y RLS Supabase</td><td>Gobierno de datos</td></tr>
+          <tr><td>P1</td><td>Implantar CI/CD con gates de calidad</td><td>Menos regresiones</td></tr>
+          <tr><td>P1</td><td>Hardening del proxy IGDB</td><td>Seguridad</td></tr>
+          <tr><td>P2</td><td>E2E real (Detox o Maestro)</td><td>Validacion extremo a extremo</td></tr>
+          <tr><td>P2</td><td>Mejoras A11y (teclado, foco, labels)</td><td>Inclusividad</td></tr>
+          <tr><td>P3</td><td>Recuperar documentacion ausente referenciada en README</td><td>Onboarding</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="14-bibliografia" class="page-break">
+      <h2>14. Bibliografia</h2>
+      <p>[1] Expo Docs - https://docs.expo.dev/</p>
+      <p>[2] React Native Docs - https://reactnative.dev/docs/getting-started</p>
+      <p>[3] Expo Router Docs - https://docs.expo.dev/router/introduction/</p>
+      <p>[4] TanStack React Query - https://tanstack.com/query/latest/docs/framework/react/overview</p>
+      <p>[5] Zustand Docs - https://docs.pmnd.rs/zustand/getting-started/introduction</p>
+      <p>[6] Supabase Docs - https://supabase.com/docs</p>
+      <p>[7] Clerk Expo Docs - https://clerk.com/docs/expo</p>
+      <p>[8] TMDb API Docs - https://developer.themoviedb.org/docs</p>
+      <p>[9] IGDB API Docs - https://api-docs.igdb.com/</p>
+      <p>[10] Vercel Functions - https://vercel.com/docs/functions</p>
+      <p>[11] CNMC Panel de Hogares (plataformas de pago audiovisual, junio 2025) - https://www.cnmc.es/prensa/panel-hogares-plataformas-pago-audiovisual-20250613</p>
+      <p>[12] Deloitte 2025 Digital Media Trends - https://www.deloitte.com/us/en/about/press-room/deloitte-digital-media-trends-survey-2025-media-and-entertainment-industry-outlook.html</p>
+      <p>[13] Newzoo Global Games Market Report 2024 - https://newzoo.com/resources/blog/global-games-market-report-2024</p>
+      <p>[14] PwC Global E&amp;M Outlook 2025 (digital games) - https://www.pwc.com/gx/en/news-room/press-releases/2025/digital-games-projected-to-take-center-stage-globally.html</p>
+      <p>[15] Nielsen The Gauge (mayo 2025) - https://www.nielsen.com/insights/2025/the-gauge-streaming-captures-largest-share-of-tv-viewing-in-may/</p>
+    </section>
+
+    <section id="15-anexos" class="page-break">
+      <h2>15. Anexos</h2>
+
+      <h3>Anexo A. Instalacion y ejecucion</h3>
+      <pre>npm install --legacy-peer-deps
+cp .env.example .env.local
+npm start
+npm run web
+npm run proxy:igdb   # opcional en dev web</pre>
+
+      <h3>Anexo B. Variables de entorno</h3>
+      <p>Ver tabla completa en la version Markdown: <code>docs/TFG_MEMORIA.md</code> (Anexo B).</p>
+
+      <h3>Anexo C. Arbol de proyecto</h3>
+      <p>Se incluye arbol detallado en <code>docs/TFG_MEMORIA.md</code> (Anexo C).</p>
+
+      <h3>Anexo D. Configuracion clave</h3>
+      <pre>vercel.json -> buildCommand: "npm run export:web"
+package.json -> scripts start/web/ios/android/lint/type-check/test
+src/providers/QueryProvider.tsx -> retries + staleTime + gcTime</pre>
+
+      <h3>Anexo E. Endpoints/rutas/pantallas</h3>
+      <table>
+        <thead><tr><th>Tipo</th><th>Elementos principales</th></tr></thead>
+        <tbody>
+          <tr><td>Rutas app</td><td><code>/(tabs)</code>, <code>/auth</code>, <code>/browse/[type]</code>, <code>/movie/[id]</code>, <code>/tv/[id]</code>, <code>/game/[id]</code>, <code>/friends</code>, <code>/friend/[id]</code>, <code>/achievements</code></td></tr>
+          <tr><td>TMDb</td><td><code>/movie/*</code>, <code>/tv/*</code>, <code>/search/*</code>, <code>/discover/*</code>, <code>/trending/*</code></td></tr>
+          <tr><td>IGDB</td><td><code>POST /games</code> (Apicalypse)</td></tr>
+          <tr><td>Proxy</td><td><code>POST /api/igdb/[...path]</code></td></tr>
+          <tr><td>Supabase tablas</td><td><code>profiles</code>, <code>friend_requests</code>, <code>friends</code>, <code>library_items</code></td></tr>
+        </tbody>
+      </table>
+
+      <blockquote>
+        Nota metodologica: todo el contenido tecnico deriva del repositorio local; cuando se usa contexto externo no explicitado en codigo, se marca como "Inferencia razonada".
+      </blockquote>
+    </section>
+  </main>
+</body>
+</html>

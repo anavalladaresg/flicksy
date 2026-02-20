@@ -4,21 +4,19 @@ import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo } from 'react';
-import { ActivityIndicator, Platform, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { QueryProvider } from '../src/providers/QueryProvider';
+import { LoadingProvider } from '../src/providers/LoadingProvider';
 import { CLERK_PUBLISHABLE_KEY, isClerkConfigured } from '../src/services/clerk';
 import { clerkEsLocalization } from '../src/services/clerk-localization';
-import { configureNotifications, registerPushToken } from '../src/services/notifications';
-import { saveOwnPushToken } from '../src/services/social';
-import { showInAppNotification } from '../src/services/in-app-notifications';
 import { evaluateAchievementUnlocks } from '../src/features/achievements/catalog';
 import { usePreferencesStore } from '../src/store/preferences';
 import { useTrackingStore } from '../src/store/tracking';
-import AppToaster from '../src/components/common/AppToaster';
+import MagicLoader from '../components/loaders/MagicLoader';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -76,7 +74,6 @@ function metricDateForGame(item: any): string | null {
 
 function AchievementUnlockWatcher() {
   const trackedItems = useTrackingStore((state) => state.items);
-  const alertsAchievements = usePreferencesStore((state) => state.alertsAchievements);
   const monthlyMovieGoal = usePreferencesStore((state) => state.monthlyMovieGoal);
   const monthlyGameGoal = usePreferencesStore((state) => state.monthlyGameGoal);
   const movieGoalPeriod = usePreferencesStore((state) => state.movieGoalPeriod);
@@ -136,17 +133,7 @@ function AchievementUnlockWatcher() {
     if (newAchievements.length === 0) return;
 
     newAchievements.forEach((achievement) => unlockAchievement(achievement.id));
-
-    if (alertsAchievements) {
-      const first = newAchievements[0];
-      const extraCount = newAchievements.length - 1;
-      showInAppNotification(
-        'success',
-        'Logro desbloqueado',
-        extraCount > 0 ? `${first.title} y ${extraCount} logro(s) mas.` : first.title
-      );
-    }
-  }, [alertsAchievements, unlockAchievement, unlockedAchievementIds, unlockedAchievementsByMetrics]);
+  }, [unlockAchievement, unlockedAchievementIds, unlockedAchievementsByMetrics]);
 
   return null;
 }
@@ -159,16 +146,16 @@ function RootLayoutContent() {
     : ({ presentation: 'modal', headerShown: false } as const);
 
   useEffect(() => {
-    configureNotifications();
+    if (Platform.OS !== 'web') return;
+    if (typeof document === 'undefined') return;
+    const viewport = document.querySelector('meta[name=\"viewport\"]');
+    if (!viewport) return;
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
   }, []);
 
   useEffect(() => {
     if (isSignedIn) {
       void useTrackingStore.getState().bootstrapRemote();
-      void (async () => {
-        const token = await registerPushToken();
-        if (token) await saveOwnPushToken(token);
-      })();
     } else {
       useTrackingStore.setState({ items: [], remoteReady: false });
     }
@@ -179,7 +166,7 @@ function RootLayoutContent() {
       <QueryProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#F8FAFC' }}>
-            <ActivityIndicator size="large" color="#0E7490" />
+            <MagicLoader size={56} text="Cargando sesión..." />
           </View>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         </ThemeProvider>
@@ -190,21 +177,22 @@ function RootLayoutContent() {
   return (
     <QueryProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="browse/[type]" options={{ headerShown: false }} />
-          <Stack.Screen name="movie/[id]" options={floatingModalOptions} />
-          <Stack.Screen name="tv/[id]" options={floatingModalOptions} />
-          <Stack.Screen name="game/[id]" options={floatingModalOptions} />
-          <Stack.Screen name="friends" options={floatingModalOptions} />
-          <Stack.Screen name="achievements" options={floatingModalOptions} />
-          <Stack.Screen name="friend/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <AchievementUnlockWatcher />
-        <AppToaster />
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <LoadingProvider>
+          <Stack>
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="browse/[type]" options={{ headerShown: false }} />
+            <Stack.Screen name="movie/[id]" options={floatingModalOptions} />
+            <Stack.Screen name="tv/[id]" options={floatingModalOptions} />
+            <Stack.Screen name="game/[id]" options={floatingModalOptions} />
+            <Stack.Screen name="friends" options={floatingModalOptions} />
+            <Stack.Screen name="achievements" options={floatingModalOptions} />
+            <Stack.Screen name="friend/[id]" options={floatingModalOptions} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+          <AchievementUnlockWatcher />
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        </LoadingProvider>
       </ThemeProvider>
     </QueryProvider>
   );

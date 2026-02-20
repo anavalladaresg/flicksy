@@ -21,7 +21,7 @@ export default function AuthScreenWeb() {
       colorInputText: '#E5E7EB',
       borderRadius: '12px',
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-      fontSize: '16px',
+      fontSize: '14px',
     },
     elements: {
       rootBox: {
@@ -45,6 +45,8 @@ export default function AuthScreenWeb() {
       headerSubtitle: {
         color: '#CBD5E1',
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        fontSize: '13px',
+        lineHeight: '18px',
       },
       formButtonPrimary: {
         backgroundColor: '#0E7490',

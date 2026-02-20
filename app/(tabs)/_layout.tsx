@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -11,6 +11,7 @@ import DynamicTopTabs from '@/src/components/common/DynamicTopTabs';
 import { useAuthStatus } from '@/src/hooks/use-auth-status';
 import { supabase } from '@/src/services/supabase';
 import { getPendingFriendRequestsCount } from '@/src/services/social';
+import MagicLoader from '@/components/loaders/MagicLoader';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -53,7 +54,7 @@ export default function TabLayout() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#F8FAFC' }}>
-        <ActivityIndicator size="large" color="#0E7490" />
+        <MagicLoader size={52} text="Cargando..." />
       </View>
     );
   }
