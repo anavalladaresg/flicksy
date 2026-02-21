@@ -23,6 +23,7 @@ import { useMoviesBySort } from '../features/movies/presentation/hooks';
 import { MovieSortOption } from '../features/movies/domain/repositories';
 import { useTVShowsBySort } from '../features/tv/presentation/hooks';
 import { TVSortOption } from '../features/tv/domain/repositories';
+import { useTrackingStore } from '../store/tracking';
 import { Game, Movie, TVShow } from '../types';
 
 type BrowseType = 'movie' | 'tv' | 'game';
@@ -51,6 +52,7 @@ const GAME_SORTS: { value: GameSortOption; label: string }[] = [
 const RECENT_SCROLL_MIN_OFFSET = 80;
 const RECENT_SCROLL_MAX_AGE_MS = 1000 * 60 * 20;
 const RECENT_SCROLL_DEBUG = false;
+const WHEEL_SCROLL_DEBUG = false;
 
 const browseScrollMemory: Partial<
   Record<
@@ -66,6 +68,11 @@ const browseScrollMemory: Partial<
 function logRecentScroll(type: BrowseType, event: string, payload?: Record<string, unknown>) {
   if (!RECENT_SCROLL_DEBUG) return;
   console.log(`[recent-scroll][${type}][${new Date().toISOString()}] ${event}`, payload ?? {});
+}
+
+function logWheelScroll(type: BrowseType, event: string, payload?: Record<string, unknown>) {
+  if (!WHEEL_SCROLL_DEBUG) return;
+  console.log(`[wheel-scroll][${type}][${new Date().toISOString()}] ${event}`, payload ?? {});
 }
 
 function dedupeItems(items: BrowseItem[]): BrowseItem[] {
@@ -130,10 +137,15 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const entranceAnim = useState(new Animated.Value(0))[0];
   const auraAnim = useRef(new Animated.Value(0)).current;
   const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const lastScrollOffsetRef = useRef(0);
   const smoothScrollFrameRef = useRef<number | null>(null);
   const smoothScrollStartAtRef = useRef<number | null>(null);
+  const wheelSmoothFrameRef = useRef<number | null>(null);
+  const wheelVelocityRef = useRef(0);
+  const wheelViewportHeightRef = useRef(0);
+  const wheelContentHeightRef = useRef(0);
   const itemLayoutsRef = useRef<Map<number, { y: number; height: number }>>(new Map());
   const lastAnchorItemIdRef = useRef<number | null>(null);
   const pendingRestoreStartedAtRef = useRef<number | null>(null);
@@ -147,6 +159,11 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const [gameSort, setGameSort] = useState<GameSortOption>('rating_count.desc');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<BrowseItem[]>([]);
+  const ownLibraryItems = useTrackingStore((state) => state.items);
+  const ownLibraryKeys = useMemo(
+    () => new Set(ownLibraryItems.map((item) => `${item.mediaType}-${item.externalId}`)),
+    [ownLibraryItems]
+  );
 
   const currentSort = type === 'movie' ? movieSort : type === 'tv' ? tvSort : gameSort;
 
@@ -237,6 +254,11 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
       cancelAnimationFrame(smoothScrollFrameRef.current);
       smoothScrollFrameRef.current = null;
     }
+    if (wheelSmoothFrameRef.current != null) {
+      cancelAnimationFrame(wheelSmoothFrameRef.current);
+      wheelSmoothFrameRef.current = null;
+    }
+    wheelVelocityRef.current = 0;
     smoothScrollStartAtRef.current = null;
   }
 
@@ -274,6 +296,68 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const sortOptions = useMemo(() => {
     return type === 'movie' ? MOVIE_SORTS : type === 'tv' ? TV_SORTS : GAME_SORTS;
   }, [type]);
+
+  const getWheelMaxOffset = useCallback(() => {
+    return Math.max(0, wheelContentHeightRef.current - wheelViewportHeightRef.current);
+  }, []);
+
+  const runWheelSmoothStep = useCallback(() => {
+    let velocity = wheelVelocityRef.current;
+    if (Math.abs(velocity) < 0.08) {
+      wheelVelocityRef.current = 0;
+      wheelSmoothFrameRef.current = null;
+      return;
+    }
+
+    const maxOffset = getWheelMaxOffset();
+    const current = lastScrollOffsetRef.current;
+    let nextOffset = current + velocity;
+
+    if (nextOffset < 0) {
+      nextOffset = 0;
+      velocity *= 0.32;
+    } else if (nextOffset > maxOffset) {
+      nextOffset = maxOffset;
+      velocity *= 0.32;
+    }
+
+    velocity *= 0.88;
+    if (Math.abs(velocity) < 0.08) velocity = 0;
+    wheelVelocityRef.current = velocity;
+
+    if (Math.abs(nextOffset - current) > 0.01) {
+      scrollRef.current?.scrollTo({ y: nextOffset, animated: false });
+      lastScrollOffsetRef.current = nextOffset;
+    }
+
+    wheelSmoothFrameRef.current = requestAnimationFrame(runWheelSmoothStep);
+  }, [getWheelMaxOffset]);
+
+  const handleWheelSmoothScroll = useCallback(
+    (event: any) => {
+      if (!isWeb) return;
+      const deltaY = Number(event?.deltaY ?? event?.nativeEvent?.deltaY ?? 0);
+      if (!Number.isFinite(deltaY) || deltaY === 0) return;
+      const cancelable = Boolean(event?.nativeEvent?.cancelable ?? event?.cancelable);
+      if (cancelable) event.preventDefault?.();
+
+      // Stop any active programmatic jump and continue with an inertial wheel motion.
+      if (smoothScrollFrameRef.current != null) {
+        cancelAnimationFrame(smoothScrollFrameRef.current);
+        smoothScrollFrameRef.current = null;
+      }
+      smoothScrollStartAtRef.current = null;
+
+      const normalizedDelta = Math.max(-120, Math.min(120, deltaY));
+      const impulse = normalizedDelta * 0.09;
+      wheelVelocityRef.current = Math.max(-52, Math.min(52, wheelVelocityRef.current + impulse));
+
+      if (wheelSmoothFrameRef.current == null) {
+        wheelSmoothFrameRef.current = requestAnimationFrame(runWheelSmoothStep);
+      }
+    },
+    [isWeb, runWheelSmoothStep]
+  );
 
   function easeInOutCubic(value: number) {
     if (value < 0.5) return 4 * value * value * value;
@@ -604,9 +688,25 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
         ref={scrollRef as any}
         style={{ opacity: entranceAnim }}
         contentContainerStyle={[styles.content, isWeb && styles.contentWeb]}
+        onLayout={(event) => {
+          wheelViewportHeightRef.current = event.nativeEvent.layout.height ?? 0;
+          logWheelScroll(type, 'viewport-layout', {
+            viewportHeight: Number(wheelViewportHeightRef.current.toFixed(2)),
+          });
+        }}
+        onContentSizeChange={(_, contentHeight) => {
+          wheelContentHeightRef.current = contentHeight ?? 0;
+          logWheelScroll(type, 'content-size-change', {
+            contentHeight: Number(wheelContentHeightRef.current.toFixed(2)),
+            maxOffset: Number(getWheelMaxOffset().toFixed(2)),
+          });
+        }}
         onScrollBeginDrag={() => {
           stopSmoothScroll();
           logRecentScroll(type, 'smooth-scroll-cancelled-by-user-drag');
+          logWheelScroll(type, 'wheel-cancelled-by-drag', {
+            currentOffset: Number(lastScrollOffsetRef.current.toFixed(2)),
+          });
         }}
         onScroll={(event) => {
           const offsetY = event.nativeEvent.contentOffset.y;
@@ -614,6 +714,11 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
           lastAnchorItemIdRef.current = resolveAnchorItemId(offsetY);
         }}
         scrollEventThrottle={16}
+        {...(isWeb
+          ? ({
+              onWheel: handleWheelSmoothScroll,
+            } as any)
+          : null)}
       >
         <ScrollView
           horizontal
@@ -649,6 +754,8 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
         ) : (
           <>
             {items.map((item, index) => {
+              const itemKey = `${type}-${item.id}`;
+              const isInOwnLibrary = ownLibraryKeys.has(itemKey);
               const start = Math.min(index * 0.05, 0.62);
               const end = Math.min(start + 0.26, 1);
               return (
@@ -699,10 +806,34 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
                     {...(isWeb
                       ? {
                           onMouseEnter: () => setHoveredItemId(item.id),
-                          onMouseLeave: () => setHoveredItemId(null),
+                          onMouseLeave: () => {
+                            setHoveredItemId(null);
+                            setHoveredLibraryKey(null);
+                          },
                         }
                       : {})}
                   >
+                    {isInOwnLibrary ? (
+                      <View
+                        style={styles.inLibraryBadgeWrap}
+                        {...(isWeb
+                          ? {
+                              onMouseEnter: () => setHoveredLibraryKey(itemKey),
+                              onMouseLeave: () =>
+                                setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                            }
+                          : {})}
+                      >
+                        <View style={styles.inLibraryBadge}>
+                          <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                        </View>
+                        {isWeb && hoveredLibraryKey === itemKey ? (
+                          <View style={styles.iconTooltip}>
+                            <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
                     <View style={[styles.posterFrame, isWeb && hoveredItemId === item.id && styles.posterFrameHovered]}>
                       <Image
                         source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
@@ -869,12 +1000,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    position: 'relative',
+    overflow: 'visible',
     ...(Platform.OS === 'web' && {
       boxShadow: '0 12px 24px rgba(2,6,23,0.08)',
       transitionDuration: '460ms',
       transitionProperty: 'box-shadow',
       transitionTimingFunction: 'cubic-bezier(0.4,0,0.2,1)',
-      overflow: 'visible',
       willChange: 'box-shadow',
     } as any),
   },
@@ -916,6 +1048,41 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: '#64748B',
+  },
+  inLibraryBadgeWrap: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 30,
+    overflow: 'visible',
+  },
+  inLibraryBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0E7490',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+    boxShadow: '0 4px 12px rgba(14,116,144,0.28)',
+  },
+  iconTooltip: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  iconTooltipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as any) : null),
   },
   loadMoreButton: {
     marginTop: 8,
