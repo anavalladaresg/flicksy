@@ -60,6 +60,7 @@ const RECENT_SCROLL_MIN_OFFSET = 80;
 const RECENT_SCROLL_MAX_AGE_MS = 1000 * 60 * 20;
 const RECENT_SCROLL_DEBUG = false;
 const WHEEL_SCROLL_DEBUG = false;
+const ENABLE_CUSTOM_WHEEL_SCROLL = false;
 
 const browseScrollMemory: Partial<
   Record<
@@ -226,7 +227,12 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
         : type === 'tv'
           ? mapTVItems(activeQuery.data.data as TVShow[])
           : mapGameItems(activeQuery.data.data as Game[]);
-    setItems((prev) => dedupeItems([...prev, ...mapped]));
+    const sanitized = mapped.filter((item) => {
+      const hasTitle = typeof item.name === 'string' && item.name.trim().length > 0;
+      const hasImage = typeof item.imageUrl === 'string' && item.imageUrl.trim().length > 0;
+      return hasTitle && hasImage;
+    });
+    setItems((prev) => dedupeItems([...prev, ...sanitized]));
   }, [activeQuery.data, type]);
 
   useEffect(() => {
@@ -353,7 +359,7 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
 
   const handleWheelSmoothScroll = useCallback(
     (event: any) => {
-      if (!isWeb) return;
+      if (!isWeb || !ENABLE_CUSTOM_WHEEL_SCROLL) return;
       const deltaY = Number(event?.deltaY ?? event?.nativeEvent?.deltaY ?? 0);
       if (!Number.isFinite(deltaY) || deltaY === 0) return;
       const cancelable = Boolean(event?.nativeEvent?.cancelable ?? event?.cancelable);
@@ -732,7 +738,7 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
           lastAnchorItemIdRef.current = resolveAnchorItemId(offsetY);
         }}
         scrollEventThrottle={16}
-        {...(isWeb
+        {...(isWeb && ENABLE_CUSTOM_WHEEL_SCROLL
           ? ({
               onWheel: handleWheelSmoothScroll,
             } as any)
