@@ -1,227 +1,304 @@
-# 🎬 Flicksy - Media Tracker App
+# Flicksy
 
-Una aplicación React Native moderna para hacer seguimiento de películas, series y videojuegos con integración de APIs reales (TMDb e IGDB).
+<p align="center">
+  <b>Track movies, TV shows, and games in one place.</b><br/>
+  Discovery + personal library + social features, built with Expo/React Native.
+</p>
 
-## ✨ Características
+<p align="center">
+  <img alt="Expo" src="https://img.shields.io/badge/Expo-54-000020?logo=expo&logoColor=white" />
+  <img alt="React Native" src="https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react&logoColor=black" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white" />
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Auth%20%26%20Social-3ECF8E?logo=supabase&logoColor=white" />
+  <img alt="Clerk" src="https://img.shields.io/badge/Clerk-Auth-6C47FF" />
+  <img alt="TMDB" src="https://img.shields.io/badge/TMDB-Content%20API-01D277" />
+  <img alt="IGDB" src="https://img.shields.io/badge/IGDB-Games%20API-9146FF" />
+</p>
 
-- 🎥 **Descubrimiento de Contenido**: Películas, series y juegos populares
-- 🔍 **Búsqueda Global**: Busca simultáneamente en todas las categorías
-- 📚 **Biblioteca Personal**: Guarda lo que estás viendo/jugando
-- 📱 **UI Moderna**: Interfaz responsive con React Native + Expo
-- 🏗️ **Arquitectura Limpia**: Domain/Data/Presentation pattern
-- � **TypeScript Total**: Tipado estricto en toda la app
-- ⚡ **React Query**: Caching y sincronización automática
-- 🧠 **Zustand**: Estado global ligero
-- 🧪 **Tests**: Unit tests incluidos
+## Why Flicksy
+- **Unified tracking** for movies, TV and games
+- **Global discovery and search** across media types
+- **Social layer** with friends, shared ratings, and compatibility
+- **Library depth**: statuses, ratings, date ranges, goals, achievements
+- **Web + mobile UX** with responsive layouts and floating details on web
 
-## 🚀 Quick Start
+## Feature Highlights
 
-### 1. Instalar
-```bash
-npm install --legacy-peer-deps
+### Discovery
+- Popular/sorted feeds for each media type
+- Dedicated "browse all" sections
+- Cross-media search
+
+### Personal Library
+- Status tracking by media type:
+  - Movie: `planned`, `completed`
+  - TV: `planned`, `watching`, `completed`
+  - Game: `planned`, `playing`, `completed`
+- Ratings (0-10, 0.5 steps)
+- Date capture:
+  - Movie: single watch date
+  - TV/Game: start + end dates
+  - Approximate date flags
+- List and gallery views
+
+### Social & Profile
+- Friend requests and friend libraries
+- Friend ratings in detail screens
+- Compatibility scoring
+- Avatar/profile sync
+- Goals and achievements
+
+## API Integrations
+
+| API / Service | Purpose in Flicksy | Auth / Credentials | Where it's used |
+|---|---|---|---|
+| **TMDB** | Movies/TV discovery, search, details, images | `EXPO_PUBLIC_TMDB_API_KEY` | `src/features/movies/*`, `src/features/tv/*`, `src/services/http.ts` |
+| **IGDB** | Games discovery, search, details | `EXPO_PUBLIC_IGDB_CLIENT_ID`, `EXPO_PUBLIC_IGDB_ACCESS_TOKEN` | `src/features/games/*`, `src/services/http.ts` |
+| **IGDB Proxy (Web)** | Secure IGDB calls from web | Server env in API function/proxy | `api/igdb/[...path].ts`, `scripts/igdb-proxy.js` |
+| **Clerk** | Authentication/session | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | `app/_layout.tsx`, `src/services/clerk.ts` |
+| **Supabase** | Social data, relationships, cloud persistence | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/services/social.ts`, `src/services/supabase.ts` |
+
+### API Notes
+- **TMDB** is used directly from client code.
+- **IGDB**:
+  - Native runtime: direct IGDB calls with credentials.
+  - Web runtime: routed through proxy (`/api/igdb`) to avoid exposing IGDB credentials in browser requests.
+
+## Architecture at a Glance
+
+```mermaid
+flowchart LR
+  UI["app/ + src/screens"] --> Hooks["hooks + React Query hooks"]
+  Hooks --> Features["features/{movies,tv,games}"]
+  Features --> HTTP["services/http.ts"]
+  HTTP --> TMDB["TMDB API"]
+  HTTP --> IGDB["IGDB API / Proxy"]
+  UI --> Store["zustand stores"]
+  Store --> Tracking["tracking store"]
+  Store --> Prefs["preferences store"]
+  UI --> Social["services/social.ts"]
+  Social --> Supabase["Supabase"]
+  UI --> Auth["Clerk"]
 ```
 
-### 2. Configurar
+## Project Structure
+
+```text
+app/
+  (tabs)/
+  movie/[id].tsx
+  tv/[id].tsx
+  game/[id].tsx
+  browse/[type].tsx
+  friends.tsx
+  friend/[id].tsx
+  achievements.tsx
+
+src/
+  components/
+  features/
+    movies/
+    tv/
+    games/
+    achievements/
+  hooks/
+  providers/
+  screens/
+  services/
+  store/
+  types/
+  utils/
+
+api/
+  igdb/[...path].ts
+
+scripts/
+  igdb-proxy.js
+```
+
+## Requirements
+- Node.js 18+
+- npm 9+
+- Xcode (for iOS simulator)
+- Android Studio (for Android emulator)
+
+## Environment Variables
+
+Create `.env.local` at repository root.
+
+### Required
 ```bash
+# TMDB
+EXPO_PUBLIC_TMDB_API_KEY=
+
+# IGDB
+EXPO_PUBLIC_IGDB_CLIENT_ID=
+EXPO_PUBLIC_IGDB_ACCESS_TOKEN=
+
+# Clerk
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=
+
+# Supabase
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+# Optional alias supported:
+# EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+```
+
+### Optional
+```bash
+# Deep linking
+EXPO_PUBLIC_APP_URL=flicksy://
+
+# Web IGDB proxy (web runtime)
+EXPO_PUBLIC_IGDB_PROXY_URL=/api/igdb
+EXPO_PUBLIC_IGDB_LOCAL_PROXY_URL=http://127.0.0.1:8787/api/igdb
+
+# IGDB debug logs
+EXPO_PUBLIC_DEBUG_IGDB=false
+```
+
+## Quick Start
+
+```bash
+npm install
 cp .env.example .env.local
-# Edita .env.local con tus claves de API
+# fill values in .env.local
 ```
 
-### 3. Ejecutar
+Run:
 ```bash
 npm start
-# Escanea código QR con Expo Go
 ```
 
-**[Guía detallada →](./QUICK_START.md)**
-
-## 📚 Documentación
-
-- **[QUICK_START.md](./QUICK_START.md)** - Empezar en 5 minutos
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Estructura y patrones
-- **[API_INTEGRATION.md](./API_INTEGRATION.md)** - Integración de APIs
-- **[USAGE_EXAMPLES.md](./USAGE_EXAMPLES.md)** - Ejemplos de código
-- **[TYPESCRIPT_GUIDE.md](./TYPESCRIPT_GUIDE.md)** - Guía de tipos
-- **[SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md)** - Checklist de setup
-
-## 🏗️ Arquitectura
-
-```
-src/
-├── features/           # Feature modules (movies, tv, games, tracking)
-├── services/           # HTTP clients, error handling
-├── components/         # Componentes reutilizables
-├── screens/            # Pantallas principales
-├── navigation/         # React Navigation setup
-├── store/              # Zustand stores
-├── types/              # Tipos TypeScript
-├── constants/          # Configuración
-└── utils/              # Utilidades
+Platform shortcuts:
+```bash
+npm run ios
+npm run android
+npm run web
 ```
 
-## 🔌 Stack Tecnológico
-
-- **Expo 54** - React Native framework
-- **React Navigation 7** - Navegación
-- **TypeScript 5.9** - Tipado estricto
-- **@tanstack/react-query** - Data fetching y caching
-- **Zustand** - Estado global
-- **Axios** - Cliente HTTP
-- **Jest** - Testing
-
-## 🎯 Casos de Uso
-
-### 1. Cargar películas populares
-```typescript
-const { data, isLoading } = usePopularMovies(1);
-```
-
-### 2. Buscar películas
-```typescript
-const { data } = useSearchMovies({ query: 'inception' }, enabled);
-```
-
-### 3. Agregar a biblioteca
-```typescript
-const { addItem } = useTrackingStore();
-addItem({
-  externalId: 550,
-  mediaType: 'movie',
-  title: 'Fight Club',
-  status: 'watching'
-});
-```
-
-**[Más ejemplos →](./USAGE_EXAMPLES.md)**
-
-## 🧪 Testing
+## Scripts
 
 ```bash
-# Unit tests
+npm start            # Expo dev server
+npm run ios          # iOS
+npm run android      # Android
+npm run web          # Web
+npm run export:web   # Export web to dist/
+npm run proxy:igdb   # Local IGDB proxy
+npm run lint         # Lint
+npm run type-check   # TS check
+npm test             # Unit tests
+npm run test:watch
+npm run test:coverage
+npm run format
+```
+
+## Routing
+
+### Tabs
+- `/(tabs)/index` -> Home
+- `/(tabs)/explore` -> Search
+- `/(tabs)/tracked` -> Library
+- `/(tabs)/profile` -> Profile
+
+### Detail/Modal routes
+- `/movie/[id]`
+- `/tv/[id]`
+- `/game/[id]`
+- `/browse/[type]`
+- `/friends`
+- `/friend/[id]`
+- `/achievements`
+
+## Data & State
+
+### Stores
+- `src/store/tracking.ts`
+  - tracked items
+  - local persistence
+  - remote bootstrap/sync
+- `src/store/preferences.ts`
+  - theme and UX defaults
+  - goals and achievement flags
+
+### Query/Data
+- Feature repositories:
+  - `src/features/movies/*`
+  - `src/features/tv/*`
+  - `src/features/games/*`
+- Shared HTTP clients:
+  - `src/services/http.ts`
+
+### Social
+- `src/services/social.ts`
+  - friend graph
+  - requests
+  - compatibility
+  - friend library/rating surfaces
+
+## IGDB Proxy Setup (Web)
+
+### Local proxy
+```bash
+npm run proxy:igdb
+```
+Serves:
+`http://127.0.0.1:8787/api/igdb`
+
+### Serverless proxy
+- API route: `api/igdb/[...path].ts`
+- Vercel config: `vercel.json`
+
+## Web Build & Deploy
+
+Build static output:
+```bash
+npm run export:web
+```
+
+Generated output:
+- `dist/`
+
+`vercel.json` is already set to:
+- build with `npm run export:web`
+- serve from `dist`
+- run API functions under `api/**`
+
+## Testing
+```bash
 npm test
-
-# Watch mode
-npm test -- --watch
-
-# Coverage
-npm test -- --coverage
+npm run test:watch
+npm run test:coverage
 ```
 
-## ⚙️ Comandos
+## Troubleshooting
 
-```bash
-npm start         # Iniciar app
-npm run ios       # iOS
-npm run android   # Android
-npm run web       # Web
-npm test          # Tests
-npm run type-check # Verificar tipos
-npm run lint      # Linter
-npm run format    # Formatear código
-```
+### Empty feeds or fetch failures
+- Verify all required env variables.
+- Check TMDB and IGDB credentials.
+- On web, confirm IGDB proxy path is reachable.
 
-## 🔑 Claves de API
+### Auth not loading
+- Verify `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`.
+- Confirm Clerk app settings for your domains/deep links.
 
-### TMDb API
-1. Ve a https://www.themoviedb.org/settings/api
-2. Solicita una API key
-3. Copia a `.env.local`:
-```
-EXPO_PUBLIC_TMDB_API_KEY=your_key
-```
+### Social features failing
+- Verify Supabase URL/key.
+- Confirm DB schema + RLS/policies are correctly configured.
 
-### IGDB API
-1. Ve a https://api-docs.igdb.com/
-2. Obtén Client ID y Access Token
-3. Copia a `.env.local`:
-```
-EXPO_PUBLIC_IGDB_CLIENT_ID=your_client_id
-EXPO_PUBLIC_IGDB_ACCESS_TOKEN=your_token
-```
+### IGDB web requests failing locally
+- Start local proxy: `npm run proxy:igdb`
+- Ensure `EXPO_PUBLIC_IGDB_LOCAL_PROXY_URL` is correct.
 
-## 📱 Pantallas
-
-- **Home** - Películas, series y juegos populares
-- **Details** - Información completa de cada media
-- **Search** - Búsqueda global
-- **Library** - Tu biblioteca personal
-
-## 🎨 Componentes Principales
-
-- `MediaCard` - Tarjeta reutilizable
-- `Skeleton` - Loaders
-- `EmptyState` - Estado vacío
-- `ErrorMessage` - Manejo de errores
-
-## 📊 Estado Global
-
-### Zustand Tracking Store
-- `addItem()` - Agregar item
-- `removeItem()` - Eliminar item
-- `updateItem()` - Actualizar item
-- `getItemsByType()` - Filtrar por tipo
-- Persiste automáticamente en AsyncStorage
-
-## 🔒 Error Handling
-
-```typescript
-import { getErrorMessage, logError } from '@/services';
-
-try {
-  const movies = await movieRepository.getPopularMovies();
-} catch (error) {
-  const message = getErrorMessage(error);
-  logError(error, 'HomeScreen');
-}
-```
-
-## 🚧 Próximas Mejoras
-
-- [ ] E2E tests con Maestro/Detox
-- [ ] Dark mode
-- [ ] Recomendaciones personalizadas
-- [ ] Integración social
-- [ ] Notificaciones push
-
-## 📄 Licencia
-
-MIT
-
-## 👨‍💻 Autor
-
-Flicksy Team - 2026
+## Roadmap
+- Broader integration/UI test coverage
+- Better onboarding/empty-state guidance
+- Continued recommendations and social UX improvements
+- Ongoing performance tuning for large libraries
 
 ---
 
-**[Empezar →](./QUICK_START.md)** | **[Documentación](./ARCHITECTURE.md)** | **[Ejemplos](./USAGE_EXAMPLES.md)**
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Contributions are welcome. Keep PRs focused, update docs when behavior changes, and maintain parity across movie/TV/game UX when implementing new flows.
