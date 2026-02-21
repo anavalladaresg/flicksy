@@ -20,6 +20,7 @@ import { STORAGE_KEYS, TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useSearchGames } from '../features/games/presentation/hooks';
 import { useSearchMovies } from '../features/movies/presentation/hooks';
 import { useSearchTVShows } from '../features/tv/presentation/hooks';
+import { useTrackingStore } from '../store/tracking';
 import { Game, Movie, TVShow } from '../types';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
@@ -92,7 +93,13 @@ function SearchScreen() {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [hoveredResultKey, setHoveredResultKey] = useState<string | null>(null);
   const [hoveredSuggestKey, setHoveredSuggestKey] = useState<string | null>(null);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ownLibraryItems = useTrackingStore((state) => state.items);
+  const ownLibraryKeys = useMemo(
+    () => new Set(ownLibraryItems.map((item) => `${item.mediaType}-${item.externalId}`)),
+    [ownLibraryItems]
+  );
 
   useEffect(() => {
     return () => {
@@ -520,45 +527,73 @@ function SearchScreen() {
             </View>
           )}
 
-          {mixedResults.map((item) => (
-            <TouchableOpacity
-              key={`${item.mediaType}-${item.id}`}
-              style={[
-                styles.item,
-                { backgroundColor: palette.panel, borderColor: palette.panelBorder },
-                isWeb && styles.itemWeb,
-                isWeb && hoveredResultKey === `${item.mediaType}-${item.id}` && styles.itemWebHovered,
-              ]}
-              activeOpacity={0.75}
-              onPress={() => {
-                void saveSearchTerm(query || item.title);
-                router.push(mediaRoute(item));
-              }}
-              {...(isWeb
-                ? {
-                    onMouseEnter: () => setHoveredResultKey(`${item.mediaType}-${item.id}`),
-                    onMouseLeave: () => setHoveredResultKey(null),
-                  }
-                : {})}
-            >
-              <Image
-                source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
-                style={styles.poster}
-                resizeMode="cover"
-              />
-              <View style={styles.itemTextWrap}>
-                <Text style={[styles.itemTitle, { color: palette.text }]}>{item.title}</Text>
-                <View style={styles.metaRow}>
-                  <View style={styles.typeBadge}>
-                    <MaterialIcons name={mediaIcon(item.mediaType)} size={12} color="#0E7490" />
+          {mixedResults.map((item) => {
+            const itemKey = `${item.mediaType}-${item.id}`;
+            const isInOwnLibrary = ownLibraryKeys.has(itemKey);
+            return (
+              <TouchableOpacity
+                key={itemKey}
+                style={[
+                  styles.item,
+                  { backgroundColor: palette.panel, borderColor: palette.panelBorder },
+                  isWeb && styles.itemWeb,
+                  isWeb && hoveredResultKey === itemKey && styles.itemWebHovered,
+                ]}
+                activeOpacity={0.75}
+                onPress={() => {
+                  void saveSearchTerm(query || item.title);
+                  router.push(mediaRoute(item));
+                }}
+                {...(isWeb
+                  ? {
+                      onMouseEnter: () => setHoveredResultKey(itemKey),
+                      onMouseLeave: () => {
+                        setHoveredResultKey(null);
+                        setHoveredLibraryKey(null);
+                      },
+                    }
+                  : {})}
+              >
+                <Image
+                  source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
+                  style={styles.poster}
+                  resizeMode="cover"
+                />
+                <View style={styles.itemTextWrap}>
+                  <Text style={[styles.itemTitle, { color: palette.text }]}>{item.title}</Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.typeBadge}>
+                      <MaterialIcons name={mediaIcon(item.mediaType)} size={12} color="#0E7490" />
+                    </View>
+                    <Text style={[styles.itemMeta, { color: palette.subtext }]}> 
+                      {item.rating ? `★ ${item.rating.toFixed(1)}` : 'Sin rating'}
+                    </Text>
                   </View>
-                  <Text style={[styles.itemMeta, { color: palette.subtext }]}> 
-                    {item.rating ? `★ ${item.rating.toFixed(1)}` : 'Sin rating'}
-                  </Text>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+                {isInOwnLibrary ? (
+                  <View
+                    style={styles.inLibraryBadgeWrap}
+                    {...(isWeb
+                      ? {
+                          onMouseEnter: () => setHoveredLibraryKey(itemKey),
+                          onMouseLeave: () =>
+                            setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                        }
+                      : {})}
+                  >
+                    <View style={styles.inLibraryBadge}>
+                      <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                    </View>
+                    {isWeb && hoveredLibraryKey === itemKey ? (
+                      <View style={styles.iconTooltip}>
+                        <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
 
           {noResults && (
             <View style={styles.emptyState}>
@@ -731,6 +766,8 @@ const styles = StyleSheet.create({
     padding: 8,
     marginBottom: 8,
     borderWidth: 1,
+    position: 'relative',
+    overflow: 'visible',
   },
   itemWeb: {
     ...(Platform.OS === 'web'
@@ -781,6 +818,41 @@ const styles = StyleSheet.create({
   },
   itemMeta: {
     fontSize: 12,
+  },
+  inLibraryBadgeWrap: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 20,
+    overflow: 'visible',
+  },
+  inLibraryBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0E7490',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+    boxShadow: '0 4px 12px rgba(14,116,144,0.28)',
+  },
+  iconTooltip: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  iconTooltipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as any) : null),
   },
   webWarning: {
     fontSize: 13,

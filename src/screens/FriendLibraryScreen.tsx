@@ -7,6 +7,7 @@ import UserAvatar from '../components/common/UserAvatar';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { useEscapeClose } from '../hooks/use-escape-close';
 import { getFriendLibrary } from '../services/social';
+import { useTrackingStore } from '../store/tracking';
 import type { MediaType, TrackedItem } from '../types';
 import MagicLoader from '@/components/loaders/MagicLoader';
 
@@ -60,6 +61,12 @@ function FriendLibraryScreen() {
   const [sortBy, setSortBy] = useState<SortBy>('status');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | number | null>(null);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
+  const ownLibraryItems = useTrackingStore((state) => state.items);
+  const ownLibraryKeys = useMemo(
+    () => new Set(ownLibraryItems.map((trackedItem) => `${trackedItem.mediaType}-${trackedItem.externalId}`)),
+    [ownLibraryItems]
+  );
 
   useEscapeClose(isSortOpen, () => setIsSortOpen(false));
 
@@ -206,6 +213,8 @@ function FriendLibraryScreen() {
           filtered.map((item, index) => {
             const previous = filtered[index - 1];
             const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
+            const itemKey = `${item.mediaType}-${item.externalId}`;
+            const isInOwnLibrary = ownLibraryKeys.has(itemKey);
             return (
               <View key={item.id}>
                 {showStatusSeparator ? <View style={[styles.statusSeparator, isDark && styles.statusSeparatorDark]} /> : null}
@@ -228,7 +237,10 @@ function FriendLibraryScreen() {
                   {...(isWeb
                     ? {
                         onMouseEnter: () => setHoveredCardId(item.id),
-                        onMouseLeave: () => setHoveredCardId(null),
+                        onMouseLeave: () => {
+                          setHoveredCardId(null);
+                          setHoveredLibraryKey(null);
+                        },
                       }
                     : {})}
                 >
@@ -244,6 +256,27 @@ function FriendLibraryScreen() {
                       </Text>
                     </View>
                   </View>
+                  {isInOwnLibrary ? (
+                    <View
+                      style={styles.inLibraryBadgeWrap}
+                      {...(isWeb
+                        ? {
+                            onMouseEnter: () => setHoveredLibraryKey(itemKey),
+                            onMouseLeave: () =>
+                              setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                          }
+                        : {})}
+                    >
+                      <View style={styles.inLibraryBadge}>
+                        <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                      </View>
+                      {isWeb && hoveredLibraryKey === itemKey ? (
+                        <View style={styles.iconTooltip}>
+                          <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               </View>
             );
@@ -462,6 +495,8 @@ const styles = StyleSheet.create({
     padding: 10,
     flexDirection: 'row',
     gap: 10,
+    position: 'relative',
+    overflow: 'visible',
   },
   cardWeb: {
     ...(Platform.OS === 'web'
@@ -509,6 +544,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   friendRating: { fontSize: 12, fontWeight: '700' },
+  inLibraryBadgeWrap: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 20,
+    overflow: 'visible',
+  },
+  inLibraryBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0E7490',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+    boxShadow: '0 4px 12px rgba(14,116,144,0.28)',
+  },
+  iconTooltip: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  iconTooltipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as any) : null),
+  },
   statusSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',

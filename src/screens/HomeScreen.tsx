@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -29,6 +29,7 @@ import { Game, MediaType, Movie, TVShow, TrackedItem } from '../types';
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 const ITEMS_PER_SECTION = 30;
 const RECOMMENDATION_ITEMS = 30;
+const DISCOVERY_ITEMS = ITEMS_PER_SECTION;
 const SAFE_RATIO = 0.8;
 const HOME_CARD_WIDTH = 148;
 const HOME_CARD_GAP = 10;
@@ -37,6 +38,125 @@ const FRIEND_CARD_WIDTH = 186;
 const FRIEND_CARD_GAP = 10;
 const FRIEND_CARD_SNAP = FRIEND_CARD_WIDTH + FRIEND_CARD_GAP;
 const WEB_TOP_TABS_OFFSET = 72;
+const HOME_WHEEL_DEBUG = false;
+
+function logHomeWheel(section: string, event: string, payload?: Record<string, unknown>) {
+  if (!HOME_WHEEL_DEBUG) return;
+  console.log(`[home-wheel][${section}][${new Date().toISOString()}] ${event}`, payload ?? {});
+}
+
+function useWebHorizontalWheel(options: {
+  enabled: boolean;
+  section: string;
+  flatListRef: React.RefObject<FlatList<any>>;
+  scrollOffsetRef: React.MutableRefObject<number>;
+}) {
+  const { enabled, section, flatListRef, scrollOffsetRef } = options;
+  const wheelAnimationRef = useRef<number | null>(null);
+  const wheelVelocityRef = useRef(0);
+  const wheelFrameCountRef = useRef(0);
+
+  const stopWheel = useCallback(() => {
+    if (wheelAnimationRef.current != null) {
+      cancelAnimationFrame(wheelAnimationRef.current);
+      wheelAnimationRef.current = null;
+    }
+    wheelVelocityRef.current = 0;
+    wheelFrameCountRef.current = 0;
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !enabled) return;
+
+    wheelVelocityRef.current = 0;
+    wheelFrameCountRef.current = 0;
+    logHomeWheel(section, 'listener-attached');
+
+    const step = () => {
+      const current = scrollOffsetRef.current;
+      let velocity = wheelVelocityRef.current;
+      wheelFrameCountRef.current += 1;
+
+      if (Math.abs(velocity) < 0.08) {
+        const settled = Math.max(0, current);
+        wheelVelocityRef.current = 0;
+        scrollOffsetRef.current = settled;
+        flatListRef.current?.scrollToOffset({ offset: settled, animated: false });
+        logHomeWheel(section, 'wheel-animation-end', {
+          finalOffset: Number(settled.toFixed(2)),
+          frames: wheelFrameCountRef.current,
+          reason: 'velocity-settled',
+        });
+        wheelAnimationRef.current = null;
+        wheelFrameCountRef.current = 0;
+        return;
+      }
+
+      // Glide model: inertia + friction for a cleaner visual feel.
+      let nextOffset = current + velocity;
+      if (nextOffset < 0) {
+        nextOffset = 0;
+        velocity *= 0.32;
+      }
+
+      // Friction curve tuned for smooth decay without abrupt stops.
+      velocity *= 0.88;
+      if (Math.abs(velocity) < 0.08) velocity = 0;
+
+      wheelVelocityRef.current = velocity;
+      scrollOffsetRef.current = nextOffset;
+      flatListRef.current?.scrollToOffset({
+        offset: scrollOffsetRef.current,
+        animated: false,
+      });
+      wheelAnimationRef.current = requestAnimationFrame(step);
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rawDelta = Number(e.deltaY || 0);
+      const normalizedDelta = Math.max(-120, Math.min(120, rawDelta));
+      const impulse = normalizedDelta * 0.05;
+      const currentOffset = scrollOffsetRef.current;
+
+      // At left edge, ignore extra negative wheel to avoid noisy micro animations.
+      if (currentOffset <= 0.5 && impulse < 0 && Math.abs(wheelVelocityRef.current) < 0.08) {
+        logHomeWheel(section, 'wheel-ignored-at-left-edge', {
+          deltaY: Number(rawDelta.toFixed(2)),
+          normalizedDelta: Number(normalizedDelta.toFixed(2)),
+        });
+        return;
+      }
+
+      wheelVelocityRef.current = Math.max(
+        -42,
+        Math.min(42, wheelVelocityRef.current + impulse)
+      );
+      logHomeWheel(section, 'wheel-input', {
+        deltaY: Number(rawDelta.toFixed(2)),
+        normalizedDelta: Number(normalizedDelta.toFixed(2)),
+        startOffset: Number(currentOffset.toFixed(2)),
+        velocity: Number(wheelVelocityRef.current.toFixed(3)),
+      });
+
+      if (wheelAnimationRef.current == null) {
+        wheelAnimationRef.current = requestAnimationFrame(step);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        logHomeWheel(section, 'listener-detached');
+        window.removeEventListener('wheel', handleWheel);
+        stopWheel();
+      };
+    }
+  }, [enabled, flatListRef, scrollOffsetRef, section, stopWheel]);
+
+  return { stopWheel };
+}
 
 type CardItem = { id: number; name: string; imageUrl: string | null; rating?: number };
 type RecommendationItem = CardItem & {
@@ -63,12 +183,15 @@ function SectionRow({
   type,
   items,
   dark,
+  ownLibraryKeys,
 }: {
   title: string;
   type: 'movie' | 'tv' | 'game';
   items: CardItem[];
   dark: boolean;
+  ownLibraryKeys: Set<string>;
 }) {
+  const wheelSection = 'main-row';
   const router = useRouter();
   const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
@@ -88,11 +211,27 @@ function SectionRow({
 
   // Manejar scroll con rueda del ratón en web
   const [isHovering, setIsHovering] = useState(false);
+  const [isDraggingVisual, setIsDraggingVisual] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
-  const scrollAnimationRef = useRef<number | null>(null);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartOffsetRef = useRef(0);
+  const { stopWheel } = useWebHorizontalWheel({
+    enabled: isHovering,
+    section: wheelSection,
+    flatListRef,
+    scrollOffsetRef,
+  });
+
+  const setBodyDragCursor = useCallback((active: boolean) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.body.style.cursor = active ? 'grabbing' : '';
+  }, []);
+
+  useEffect(() => {
+    return () => setBodyDragCursor(false);
+  }, [setBodyDragCursor]);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -103,83 +242,37 @@ function SectionRow({
     }).start();
   }, [revealAnim]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !isHovering) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Cancelar animación anterior si existe
-      if (scrollAnimationRef.current) {
-        cancelAnimationFrame(scrollAnimationRef.current);
-      }
-      
-      // Convertir scroll vertical en horizontal con factor de velocidad suave
-      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
-      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
-      
-      // Usar requestAnimationFrame para animación suave y profesional
-      const startOffset = scrollOffsetRef.current;
-      const distance = targetOffset - startOffset;
-      const duration = 350; // Duración aumentada para movimiento más suave
-      const startTime = performance.now();
-      
-      const animate = (currentTime: number) => {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-        // Aplicar curva adicional para movimiento más natural
-        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
-        
-        scrollOffsetRef.current = startOffset + distance * smoothProgress;
-        
-        if (flatListRef.current) {
-          flatListRef.current.scrollToOffset({
-            offset: scrollOffsetRef.current,
-            animated: false,
-          });
-        }
-        
-        if (progress < 1) {
-          scrollAnimationRef.current = requestAnimationFrame(animate);
-        } else {
-          scrollAnimationRef.current = null;
-        }
-      };
-      
-      scrollAnimationRef.current = requestAnimationFrame(animate);
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        window.removeEventListener('wheel', handleWheel);
-        if (scrollAnimationRef.current) {
-          cancelAnimationFrame(scrollAnimationRef.current);
-        }
-      };
-    }
-  }, [isHovering]);
-
   return (
     <View 
       ref={sectionRef}
-      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      style={[
+        styles.section,
+        styles.sectionCard,
+        dark && styles.sectionCardDark,
+        Platform.OS === 'web' ? ({ cursor: isDraggingVisual ? 'grabbing' : 'default' } as any) : null,
+      ]}
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
-        onMouseEnter: () => setIsHovering(true),
+        onMouseEnter: () => {
+          logHomeWheel(wheelSection, 'hover-enter');
+          setIsHovering(true);
+        },
         onMouseLeave: () => {
+          logHomeWheel(wheelSection, 'hover-leave');
           setIsHovering(false);
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
+          stopWheel();
         },
         onMouseDown: (event: any) => {
           const button = event?.nativeEvent?.button ?? event?.button;
           if (button !== 0) return;
           event?.preventDefault?.();
+          stopWheel();
           isDraggingRef.current = true;
+          setIsDraggingVisual(true);
+          setBodyDragCursor(true);
           suppressClickRef.current = false;
           dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
           dragStartOffsetRef.current = scrollOffsetRef.current;
@@ -195,6 +288,8 @@ function SectionRow({
         },
         onMouseUp: () => {
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
         },
       } : {})}
     >
@@ -252,16 +347,46 @@ function SectionRow({
               }}
             >
               <TouchableOpacity
-                style={[styles.card, Platform.OS === 'web' && styles.webPressableReset]}
+                style={[
+                  styles.card,
+                  Platform.OS === 'web' && styles.webPressableReset,
+                  Platform.OS === 'web' && isDraggingVisual && styles.webGrabbingCursor,
+                ]}
                 activeOpacity={0.75}
                 onPress={() => navigateAndBlur(`/${type}/${item.id}`)}
                 {...(Platform.OS === 'web'
                   ? {
                       onMouseEnter: () => setHoveredCardId(item.id),
-                      onMouseLeave: () => setHoveredCardId(null),
+                      onMouseLeave: () => {
+                        setHoveredCardId(null);
+                        setHoveredLibraryKey(null);
+                      },
                     }
                   : {})}
               >
+                {ownLibraryKeys.has(`${type}-${item.id}`) ? (
+                  <View
+                    style={styles.inLibraryBadgeWrap}
+                    {...(Platform.OS === 'web'
+                      ? {
+                          onMouseEnter: () => setHoveredLibraryKey(`${type}-${item.id}`),
+                          onMouseLeave: () =>
+                            setHoveredLibraryKey((prev) =>
+                              prev === `${type}-${item.id}` ? null : prev
+                            ),
+                        }
+                      : {})}
+                  >
+                    <View style={styles.inLibraryBadge}>
+                      <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                    </View>
+                    {Platform.OS === 'web' && hoveredLibraryKey === `${type}-${item.id}` ? (
+                      <View style={styles.iconTooltip}>
+                        <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
                 <View style={[styles.posterFrame, Platform.OS === 'web' && hoveredCardId === item.id && styles.posterFrameHovered]}>
                   <Image
                     source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
@@ -292,12 +417,15 @@ function PersonalizedRow({
   items,
   dark,
   onDismiss,
+  ownLibraryKeys,
 }: {
   title: string;
   items: RecommendationItem[];
   dark: boolean;
   onDismiss: (item: RecommendationItem) => void;
+  ownLibraryKeys: Set<string>;
 }) {
+  const wheelSection = 'personalized-row';
   const router = useRouter();
   const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
@@ -317,11 +445,28 @@ function PersonalizedRow({
 
   // Manejar scroll con rueda del ratón en web
   const [isHovering, setIsHovering] = useState(false);
+  const [isDraggingVisual, setIsDraggingVisual] = useState(false);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
-  const scrollAnimationRef = useRef<number | null>(null);
+  const [hoveredDismissKey, setHoveredDismissKey] = useState<string | null>(null);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartOffsetRef = useRef(0);
+  const { stopWheel } = useWebHorizontalWheel({
+    enabled: isHovering,
+    section: wheelSection,
+    flatListRef,
+    scrollOffsetRef,
+  });
+
+  const setBodyDragCursor = useCallback((active: boolean) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.body.style.cursor = active ? 'grabbing' : '';
+  }, []);
+
+  useEffect(() => {
+    return () => setBodyDragCursor(false);
+  }, [setBodyDragCursor]);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -332,85 +477,39 @@ function PersonalizedRow({
     }).start();
   }, [revealAnim]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !isHovering) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Cancelar animación anterior si existe
-      if (scrollAnimationRef.current) {
-        cancelAnimationFrame(scrollAnimationRef.current);
-      }
-      
-      // Convertir scroll vertical en horizontal con factor de velocidad suave
-      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
-      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
-      
-      // Usar requestAnimationFrame para animación suave y profesional
-      const startOffset = scrollOffsetRef.current;
-      const distance = targetOffset - startOffset;
-      const duration = 350; // Duración aumentada para movimiento más suave
-      const startTime = performance.now();
-      
-      const animate = (currentTime: number) => {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-        // Aplicar curva adicional para movimiento más natural
-        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
-        
-        scrollOffsetRef.current = startOffset + distance * smoothProgress;
-        
-        if (flatListRef.current) {
-          flatListRef.current.scrollToOffset({
-            offset: scrollOffsetRef.current,
-            animated: false,
-          });
-        }
-        
-        if (progress < 1) {
-          scrollAnimationRef.current = requestAnimationFrame(animate);
-        } else {
-          scrollAnimationRef.current = null;
-        }
-      };
-      
-      scrollAnimationRef.current = requestAnimationFrame(animate);
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        window.removeEventListener('wheel', handleWheel);
-        if (scrollAnimationRef.current) {
-          cancelAnimationFrame(scrollAnimationRef.current);
-        }
-      };
-    }
-  }, [isHovering]);
-
   if (items.length === 0) return null;
 
   return (
     <View 
       ref={sectionRef}
-      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      style={[
+        styles.section,
+        styles.sectionCard,
+        dark && styles.sectionCardDark,
+        Platform.OS === 'web' ? ({ cursor: isDraggingVisual ? 'grabbing' : 'default' } as any) : null,
+      ]}
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
-        onMouseEnter: () => setIsHovering(true),
+        onMouseEnter: () => {
+          logHomeWheel(wheelSection, 'hover-enter');
+          setIsHovering(true);
+        },
         onMouseLeave: () => {
+          logHomeWheel(wheelSection, 'hover-leave');
           setIsHovering(false);
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
+          stopWheel();
         },
         onMouseDown: (event: any) => {
           const button = event?.nativeEvent?.button ?? event?.button;
           if (button !== 0) return;
           event?.preventDefault?.();
+          stopWheel();
           isDraggingRef.current = true;
+          setIsDraggingVisual(true);
+          setBodyDragCursor(true);
           suppressClickRef.current = false;
           dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
           dragStartOffsetRef.current = scrollOffsetRef.current;
@@ -426,6 +525,8 @@ function PersonalizedRow({
         },
         onMouseUp: () => {
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
         },
       } : {})}
     >
@@ -483,16 +584,45 @@ function PersonalizedRow({
               }}
             >
               <TouchableOpacity
-                style={[styles.card, Platform.OS === 'web' && styles.webPressableReset]}
+                style={[
+                  styles.card,
+                  Platform.OS === 'web' && styles.webPressableReset,
+                  Platform.OS === 'web' && isDraggingVisual && styles.webGrabbingCursor,
+                ]}
                 activeOpacity={0.75}
                 onPress={() => navigateAndBlur(`/${item.mediaType}/${item.id}`)}
                 {...(Platform.OS === 'web'
                   ? {
                       onMouseEnter: () => setHoveredCardKey(key),
-                      onMouseLeave: () => setHoveredCardKey(null),
+                      onMouseLeave: () => {
+                        setHoveredCardKey(null);
+                        setHoveredDismissKey(null);
+                        setHoveredLibraryKey(null);
+                      },
                     }
                   : {})}
               >
+                {ownLibraryKeys.has(`${item.mediaType}-${item.id}`) ? (
+                  <View
+                    style={[styles.inLibraryBadgeWrap, styles.inLibraryBadgeWrapLeft]}
+                    {...(Platform.OS === 'web'
+                      ? {
+                          onMouseEnter: () => setHoveredLibraryKey(key),
+                          onMouseLeave: () =>
+                            setHoveredLibraryKey((prev) => (prev === key ? null : prev)),
+                        }
+                      : {})}
+                  >
+                    <View style={styles.inLibraryBadge}>
+                      <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                    </View>
+                    {Platform.OS === 'web' && hoveredLibraryKey === key ? (
+                      <View style={[styles.iconTooltip, styles.iconTooltipLeft]}>
+                        <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
                 <View style={[styles.posterFrame, Platform.OS === 'web' && hoveredCardKey === key && styles.posterFrameHovered]}>
                   <Image
                     source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
@@ -500,9 +630,27 @@ function PersonalizedRow({
                     resizeMode="cover"
                   />
                 </View>
-                <TouchableOpacity style={[styles.dismissButton, Platform.OS === 'web' && styles.webPressableReset]} onPress={() => onDismiss(item)}>
+                <TouchableOpacity
+                  style={[
+                    styles.dismissButton,
+                    Platform.OS === 'web' && styles.webPressableReset,
+                    Platform.OS === 'web' && isDraggingVisual && styles.webGrabbingCursor,
+                  ]}
+                  onPress={() => onDismiss(item)}
+                  {...(Platform.OS === 'web'
+                    ? {
+                        onMouseEnter: () => setHoveredDismissKey(key),
+                        onMouseLeave: () => setHoveredDismissKey((prev) => (prev === key ? null : prev)),
+                      }
+                    : {})}
+                >
                   <MaterialIcons name="block" size={13} color="#7C2D12" />
                 </TouchableOpacity>
+                {Platform.OS === 'web' && hoveredDismissKey === key ? (
+                  <View style={styles.actionTooltip}>
+                    <Text numberOfLines={1} style={styles.actionTooltipText}>No sugerir</Text>
+                  </View>
+                ) : null}
                 <Text numberOfLines={2} style={[styles.cardTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>
                   {item.name}
                 </Text>
@@ -528,10 +676,13 @@ function statusBoost(status: TrackedItem['status']): number {
 function FriendsActivityRow({
   items,
   dark,
+  ownLibraryKeys,
 }: {
   items: FriendActivityItem[];
   dark: boolean;
+  ownLibraryKeys: Set<string>;
 }) {
+  const wheelSection = 'friends-row';
   const router = useRouter();
   const suppressClickRef = useRef(false);
   const navigateAndBlur = (path: string) => {
@@ -551,10 +702,26 @@ function FriendsActivityRow({
 
   // Manejar scroll con rueda del ratón en web
   const [isHovering, setIsHovering] = useState(false);
-  const scrollAnimationRef = useRef<number | null>(null);
+  const [isDraggingVisual, setIsDraggingVisual] = useState(false);
+  const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartOffsetRef = useRef(0);
+  const { stopWheel } = useWebHorizontalWheel({
+    enabled: isHovering,
+    section: wheelSection,
+    flatListRef,
+    scrollOffsetRef,
+  });
+
+  const setBodyDragCursor = useCallback((active: boolean) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.body.style.cursor = active ? 'grabbing' : '';
+  }, []);
+
+  useEffect(() => {
+    return () => setBodyDragCursor(false);
+  }, [setBodyDragCursor]);
 
   useEffect(() => {
     Animated.timing(revealAnim, {
@@ -565,83 +732,37 @@ function FriendsActivityRow({
     }).start();
   }, [revealAnim]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !isHovering) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Cancelar animación anterior si existe
-      if (scrollAnimationRef.current) {
-        cancelAnimationFrame(scrollAnimationRef.current);
-      }
-      
-      // Convertir scroll vertical en horizontal con factor de velocidad suave
-      const scrollAmount = e.deltaY * 1.5; // Factor de velocidad ajustado para movimiento más fluido
-      const targetOffset = Math.max(0, scrollOffsetRef.current + scrollAmount);
-      
-      // Usar requestAnimationFrame para animación suave y profesional
-      const startOffset = scrollOffsetRef.current;
-      const distance = targetOffset - startOffset;
-      const duration = 350; // Duración aumentada para movimiento más suave
-      const startTime = performance.now();
-      
-      const animate = (currentTime: number) => {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        // Función de easing suave mejorada (ease-out-cubic con mejor curva)
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-        // Aplicar curva adicional para movimiento más natural
-        const smoothProgress = easeOutCubic * (2 - easeOutCubic);
-        
-        scrollOffsetRef.current = startOffset + distance * smoothProgress;
-        
-        if (flatListRef.current) {
-          flatListRef.current.scrollToOffset({
-            offset: scrollOffsetRef.current,
-            animated: false,
-          });
-        }
-        
-        if (progress < 1) {
-          scrollAnimationRef.current = requestAnimationFrame(animate);
-        } else {
-          scrollAnimationRef.current = null;
-        }
-      };
-      
-      scrollAnimationRef.current = requestAnimationFrame(animate);
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        window.removeEventListener('wheel', handleWheel);
-        if (scrollAnimationRef.current) {
-          cancelAnimationFrame(scrollAnimationRef.current);
-        }
-      };
-    }
-  }, [isHovering]);
-
   return (
     <View 
       ref={sectionRef}
-      style={[styles.section, styles.sectionCard, dark && styles.sectionCardDark]}
+      style={[
+        styles.section,
+        styles.sectionCard,
+        dark && styles.sectionCardDark,
+        Platform.OS === 'web' ? ({ cursor: isDraggingVisual ? 'grabbing' : 'default' } as any) : null,
+      ]}
       {...(Platform.OS === 'web' ? { 
         'data-section-row': true,
-        onMouseEnter: () => setIsHovering(true),
+        onMouseEnter: () => {
+          logHomeWheel(wheelSection, 'hover-enter');
+          setIsHovering(true);
+        },
         onMouseLeave: () => {
+          logHomeWheel(wheelSection, 'hover-leave');
           setIsHovering(false);
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
+          stopWheel();
         },
         onMouseDown: (event: any) => {
           const button = event?.nativeEvent?.button ?? event?.button;
           if (button !== 0) return;
           event?.preventDefault?.();
+          stopWheel();
           isDraggingRef.current = true;
+          setIsDraggingVisual(true);
+          setBodyDragCursor(true);
           suppressClickRef.current = false;
           dragStartXRef.current = event?.nativeEvent?.clientX ?? event?.clientX ?? 0;
           dragStartOffsetRef.current = scrollOffsetRef.current;
@@ -657,6 +778,8 @@ function FriendsActivityRow({
         },
         onMouseUp: () => {
           isDraggingRef.current = false;
+          setIsDraggingVisual(false);
+          setBodyDragCursor(false);
         },
       } : {})}
     >
@@ -709,10 +832,45 @@ function FriendsActivityRow({
                 }}
               >
                 <TouchableOpacity
-                  style={[styles.friendCard, dark && styles.friendCardDark, Platform.OS === 'web' && styles.webPressableReset]}
+                  style={[
+                    styles.friendCard,
+                    dark && styles.friendCardDark,
+                    Platform.OS === 'web' && styles.webPressableReset,
+                    Platform.OS === 'web' && isDraggingVisual && styles.webGrabbingCursor,
+                  ]}
                   activeOpacity={0.8}
                   onPress={() => navigateAndBlur(`/${item.mediaType}/${item.externalId}`)}
+                  {...(Platform.OS === 'web'
+                    ? {
+                        onMouseLeave: () => setHoveredLibraryKey(null),
+                      }
+                    : {})}
                 >
+                  {ownLibraryKeys.has(`${item.mediaType}-${item.externalId}`) ? (
+                    <View
+                      style={styles.inLibraryBadgeWrap}
+                      {...(Platform.OS === 'web'
+                        ? {
+                            onMouseEnter: () =>
+                              setHoveredLibraryKey(`${item.mediaType}-${item.externalId}`),
+                            onMouseLeave: () =>
+                              setHoveredLibraryKey((prev) =>
+                                prev === `${item.mediaType}-${item.externalId}` ? null : prev
+                              ),
+                          }
+                        : {})}
+                    >
+                      <View style={styles.inLibraryBadge}>
+                        <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                      </View>
+                      {Platform.OS === 'web' &&
+                      hoveredLibraryKey === `${item.mediaType}-${item.externalId}` ? (
+                        <View style={styles.iconTooltip}>
+                          <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
                   <Text numberOfLines={1} style={[styles.friendName, { color: dark ? '#93C5FD' : '#0E7490' }]}>{item.friendName}</Text>
                   <Text numberOfLines={2} style={[styles.friendTitle, { color: dark ? '#E5E7EB' : '#0F172A' }]}>{item.title}</Text>
                   <Text numberOfLines={1} style={[styles.friendMeta, { color: dark ? '#94A3B8' : '#64748B' }]}>{new Date(item.activityDate).toLocaleDateString('es-ES')}</Text>
@@ -734,6 +892,10 @@ function HomeScreen() {
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
   const trackedItems = useTrackingStore((state) => state.items);
+  const ownLibraryKeys = useMemo(
+    () => new Set(trackedItems.map((item) => `${item.mediaType}-${item.externalId}`)),
+    [trackedItems]
+  );
   const dismissedRecommendationKeys = usePreferencesStore((state) => state.dismissedRecommendationKeys);
   const dismissRecommendation = usePreferencesStore((state) => state.dismissRecommendation);
   const [friendsActivity, setFriendsActivity] = useState<FriendActivityItem[]>([]);
@@ -848,7 +1010,7 @@ function HomeScreen() {
     const safeCount = Math.max(1, Math.floor(RECOMMENDATION_ITEMS * SAFE_RATIO));
     const safe = filtered.slice(0, safeCount);
     const discoveryPool = filtered.filter((item) => !safe.some((s) => s.id === item.id && s.mediaType === item.mediaType));
-    const discovery = discoveryPool.slice(0, RECOMMENDATION_ITEMS - safe.length);
+    const discovery = discoveryPool.slice(0, DISCOVERY_ITEMS);
 
     return { safe, discovery };
   }, [trackedItems, movies, tvShows, games, dismissedRecommendationKeys]);
@@ -1026,13 +1188,15 @@ function HomeScreen() {
           items={personalized.safe}
           dark={isDark}
           onDismiss={handleDismissRecommendation}
+          ownLibraryKeys={ownLibraryKeys}
         />
-        <FriendsActivityRow items={friendsActivity} dark={isDark} />
+        <FriendsActivityRow items={friendsActivity} dark={isDark} ownLibraryKeys={ownLibraryKeys} />
         <PersonalizedRow
           title="Descubrimiento"
           items={personalized.discovery}
           dark={isDark}
           onDismiss={handleDismissRecommendation}
+          ownLibraryKeys={ownLibraryKeys}
         />
 
         <Animated.View
@@ -1059,19 +1223,19 @@ function HomeScreen() {
         {moviesQuery.isError ? (
           <Text style={styles.sectionError}>No se pudieron cargar películas.</Text>
         ) : (
-          <SectionRow title="Películas más vistas" type="movie" items={movies} dark={isDark} />
+          <SectionRow title="Películas más vistas" type="movie" items={movies} dark={isDark} ownLibraryKeys={ownLibraryKeys} />
         )}
 
         {tvQuery.isError ? (
           <Text style={styles.sectionError}>No se pudieron cargar series.</Text>
         ) : (
-          <SectionRow title="Series más vistas" type="tv" items={tvShows} dark={isDark} />
+          <SectionRow title="Series más vistas" type="tv" items={tvShows} dark={isDark} ownLibraryKeys={ownLibraryKeys} />
         )}
 
         {gamesQuery.isError ? (
           <Text style={styles.sectionError}>No se pudieron cargar videojuegos.</Text>
         ) : (
-          <SectionRow title="Juegos más jugados" type="game" items={games} dark={isDark} />
+          <SectionRow title="Juegos más jugados" type="game" items={games} dark={isDark} ownLibraryKeys={ownLibraryKeys} />
         )}
       </ScrollView>
     </RootContainer>
@@ -1368,6 +1532,65 @@ const styles = StyleSheet.create({
     borderColor: '#FDBA74',
     zIndex: 20,
   },
+  inLibraryBadgeWrap: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 24,
+    overflow: 'visible',
+  },
+  inLibraryBadgeWrapLeft: {
+    left: 6,
+    right: 'auto',
+  },
+  inLibraryBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0E7490',
+    borderWidth: 1,
+    borderColor: '#67E8F9',
+    boxShadow: '0 4px 12px rgba(14,116,144,0.28)',
+  },
+  iconTooltip: {
+    position: 'absolute',
+    top: 26,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  iconTooltipLeft: {
+    left: 0,
+    right: 'auto',
+  },
+  iconTooltipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as any) : null),
+  },
+  actionTooltip: {
+    position: 'absolute',
+    top: 32,
+    right: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    zIndex: 30,
+  },
+  actionTooltipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as any) : null),
+  },
   webPressableReset: {
     ...(Platform.OS === 'web'
       ? ({
@@ -1377,6 +1600,9 @@ const styles = StyleSheet.create({
           cursor: 'pointer',
         } as any)
       : null),
+  },
+  webGrabbingCursor: {
+    ...(Platform.OS === 'web' ? ({ cursor: 'grabbing' } as any) : null),
   },
   ratingText: {
     fontSize: 12,
