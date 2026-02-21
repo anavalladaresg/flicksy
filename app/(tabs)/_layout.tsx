@@ -96,8 +96,8 @@ export default function TabLayout() {
         tabBarStyle: useWebTopTabs
           ? { display: 'none' }
           : {
-              backgroundColor: colorScheme === 'dark' ? '#4d73b5' : '#FFFFFF',
-              borderTopColor: colorScheme === 'dark' ? '#4170c2' : '#E2E8F0',
+              backgroundColor: sceneBackground,
+              borderTopColor: colorScheme === 'dark' ? '#1E293B' : '#E2E8F0',
               minHeight: useLargerMobileTabBar ? 64 : undefined,
               paddingTop: useLargerMobileTabBar ? 6 : undefined,
               paddingBottom: useLargerMobileTabBar ? 8 : undefined,

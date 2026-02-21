@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
+    Alert,
     Image,
     Modal,
     Platform,
@@ -216,6 +217,29 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
     setScreenshotPan((prev) => clampScreenshotPan(prev.x, prev.y, clampedZoom));
   }
 
+  function requestDeleteTrackedGame() {
+    if (!trackedGameItem) return;
+    if (Platform.OS === 'web') {
+      const shouldDelete =
+        typeof window !== 'undefined' &&
+        window.confirm('¿Seguro que quieres eliminar este juego de tu biblioteca?');
+      if (shouldDelete) removeTrackedItem(trackedGameItem.id);
+      return;
+    }
+    Alert.alert(
+      'Eliminar juego',
+      '¿Seguro que quieres eliminar este juego de tu biblioteca?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => removeTrackedItem(trackedGameItem.id),
+        },
+      ]
+    );
+  }
+
   useEffect(() => {
     setScreenshotPan((prev) => {
       const next = clampScreenshotPan(prev.x, prev.y, screenshotZoom);
@@ -403,7 +427,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
               style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
               onPress={() => {
                 if (isTracked && trackedGameItem) {
-                  removeTrackedItem(trackedGameItem.id);
+                  requestDeleteTrackedGame();
                   return;
                 }
                 setRating(0);
@@ -653,6 +677,10 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
         onChangeFinishedAtApproximate={setFinishedAtApproximate}
         onCancel={() => setIsRatingOpen(false)}
         onConfirm={handleConfirmAdd}
+        onConfirmAndGoBack={() => {
+          setIsRatingOpen(false);
+          navigation.goBack();
+        }}
       />
     </RootContainer>
   );
