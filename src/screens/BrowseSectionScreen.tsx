@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -28,6 +29,7 @@ import { Game, Movie, TVShow } from '../types';
 
 type BrowseType = 'movie' | 'tv' | 'game';
 type BrowseItem = { id: number; name: string; imageUrl: string | null; rating?: number };
+type ViewMode = 'list' | 'gallery';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 
@@ -47,6 +49,11 @@ const GAME_SORTS: { value: GameSortOption; label: string }[] = [
   { value: 'rating_count.desc', label: 'Popularidad' },
   { value: 'rating.desc', label: 'Puntuación' },
   { value: 'first_release_date.desc', label: 'Lanzamiento reciente' },
+];
+
+const VIEW_MODE_OPTIONS: { value: ViewMode; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { value: 'list', label: 'Lista', icon: 'view-agenda' },
+  { value: 'gallery', label: 'Galería', icon: 'grid-view' },
 ];
 
 const RECENT_SCROLL_MIN_OFFSET = 80;
@@ -133,6 +140,8 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebMobile = isWeb && windowWidth < 860;
   const RootContainer = isWeb ? View : SafeAreaView;
   const entranceAnim = useState(new Animated.Value(0))[0];
   const auraAnim = useRef(new Animated.Value(0)).current;
@@ -157,6 +166,7 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const [movieSort, setMovieSort] = useState<MovieSortOption>('popularity.desc');
   const [tvSort, setTVSort] = useState<TVSortOption>('popularity.desc');
   const [gameSort, setGameSort] = useState<GameSortOption>('rating_count.desc');
+  const [viewMode, setViewMode] = useState<ViewMode>('gallery');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<BrowseItem[]>([]);
   const ownLibraryItems = useTrackingStore((state) => state.items);
@@ -296,6 +306,14 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
   const sortOptions = useMemo(() => {
     return type === 'movie' ? MOVIE_SORTS : type === 'tv' ? TV_SORTS : GAME_SORTS;
   }, [type]);
+
+  const activeView = VIEW_MODE_OPTIONS.find((option) => option.value === viewMode) ?? VIEW_MODE_OPTIONS[0];
+
+  function cycleViewMode() {
+    const index = VIEW_MODE_OPTIONS.findIndex((option) => option.value === viewMode);
+    const next = VIEW_MODE_OPTIONS[(index + 1) % VIEW_MODE_OPTIONS.length];
+    setViewMode(next.value);
+  }
 
   const getWheelMaxOffset = useCallback(() => {
     return Math.max(0, wheelContentHeightRef.current - wheelViewportHeightRef.current);
@@ -720,30 +738,37 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
             } as any)
           : null)}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortChips}
-        >
-          {sortOptions.map((option) => {
-            const isActive = option.value === currentSort;
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[styles.sortChip, isDark && styles.sortChipDark, isActive && styles.sortChipActive]}
-                onPress={() => {
-                  if (type === 'movie') setMovieSort(option.value as MovieSortOption);
-                  if (type === 'tv') setTVSort(option.value as TVSortOption);
-                  if (type === 'game') setGameSort(option.value as GameSortOption);
-                }}
-              >
-                <Text style={[styles.sortChipText, { color: isDark ? '#CBD5E1' : '#334155' }, isActive && styles.sortChipTextActive]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <View style={styles.controlsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.sortScroll}
+            contentContainerStyle={styles.sortChips}
+          >
+            {sortOptions.map((option) => {
+              const isActive = option.value === currentSort;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.sortChip, isDark && styles.sortChipDark, isActive && styles.sortChipActive]}
+                  onPress={() => {
+                    if (type === 'movie') setMovieSort(option.value as MovieSortOption);
+                    if (type === 'tv') setTVSort(option.value as TVSortOption);
+                    if (type === 'game') setGameSort(option.value as GameSortOption);
+                  }}
+                >
+                  <Text style={[styles.sortChipText, { color: isDark ? '#CBD5E1' : '#334155' }, isActive && styles.sortChipTextActive]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity style={[styles.viewModeButton, isDark && styles.viewModeButtonDark]} onPress={cycleViewMode}>
+            <MaterialIcons name={activeView.icon} size={14} color={isDark ? '#E5E7EB' : '#0F172A'} />
+            <Text style={[styles.viewModeText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{activeView.label}</Text>
+          </TouchableOpacity>
+        </View>
 
         {activeQuery.isLoading && page === 1 ? (
           <View style={styles.centeredInline}>
@@ -753,104 +778,199 @@ function BrowseSectionScreen({ type }: BrowseSectionScreenProps) {
           <Text style={styles.errorLine}>No se pudo cargar el listado.</Text>
         ) : (
           <>
-            {items.map((item, index) => {
-              const itemKey = `${type}-${item.id}`;
-              const isInOwnLibrary = ownLibraryKeys.has(itemKey);
-              const start = Math.min(index * 0.05, 0.62);
-              const end = Math.min(start + 0.26, 1);
-              return (
-                <Animated.View
-                  key={item.id}
-                  onLayout={(event) => {
-                    const { y, height } = event.nativeEvent.layout;
-                    const previous = itemLayoutsRef.current.get(item.id);
-                    itemLayoutsRef.current.set(item.id, { y, height });
-                    if (
-                      pendingRestoreItemId != null &&
-                      item.id === pendingRestoreItemId &&
-                      (!previous || previous.y !== y || previous.height !== height)
-                    ) {
-                      logRecentScroll(type, 'pending-anchor-layout-updated', {
-                        pendingRestoreItemId,
-                        itemId: item.id,
-                        y,
-                        height,
-                      });
-                      setRestoreRetryTick((prev) => prev + 1);
-                    }
-                  }}
-                  style={{
-                    opacity: entranceAnim.interpolate({
-                      inputRange: [start, end],
-                      outputRange: [0, 1],
-                      extrapolate: 'clamp',
-                    }),
-                    transform: [
-                      {
-                        translateY: entranceAnim.interpolate({
-                          inputRange: [start, end],
-                          outputRange: [14, 0],
-                          extrapolate: 'clamp',
-                        }),
-                      },
-                    ],
-                  }}
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.item,
-                      isDark && styles.itemDark,
-                    ]}
-                    activeOpacity={0.75}
-                    onPress={() => router.push(`/${type}/${item.id}`)}
-                    {...(isWeb
-                      ? {
-                          onMouseEnter: () => setHoveredItemId(item.id),
-                          onMouseLeave: () => {
-                            setHoveredItemId(null);
-                            setHoveredLibraryKey(null);
-                          },
+            {viewMode === 'gallery' ? (
+              <View style={styles.galleryGrid}>
+                {items.map((item, index) => {
+                  const itemKey = `${type}-${item.id}`;
+                  const isInOwnLibrary = ownLibraryKeys.has(itemKey);
+                  const start = Math.min(index * 0.05, 0.62);
+                  const end = Math.min(start + 0.26, 1);
+                  return (
+                    <Animated.View
+                      key={item.id}
+                      style={[
+                        styles.galleryItemWrap,
+                        isWebMobile && styles.galleryItemWrapWebMobile,
+                        {
+                          opacity: entranceAnim.interpolate({
+                            inputRange: [start, end],
+                            outputRange: [0, 1],
+                            extrapolate: 'clamp',
+                          }),
+                          transform: [
+                            {
+                              translateY: entranceAnim.interpolate({
+                                inputRange: [start, end],
+                                outputRange: [14, 0],
+                                extrapolate: 'clamp',
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                      onLayout={(event) => {
+                        const { y, height } = event.nativeEvent.layout;
+                        const previous = itemLayoutsRef.current.get(item.id);
+                        itemLayoutsRef.current.set(item.id, { y, height });
+                        if (
+                          pendingRestoreItemId != null &&
+                          item.id === pendingRestoreItemId &&
+                          (!previous || previous.y !== y || previous.height !== height)
+                        ) {
+                          setRestoreRetryTick((prev) => prev + 1);
                         }
-                      : {})}
-                  >
-                    {isInOwnLibrary ? (
-                      <View
-                        style={styles.inLibraryBadgeWrap}
+                      }}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.galleryCard,
+                          isWebMobile && styles.galleryCardWebMobile,
+                          isDark && styles.galleryCardDark,
+                        ]}
+                        activeOpacity={0.8}
+                        onPress={() => router.push(`/${type}/${item.id}`)}
                         {...(isWeb
                           ? {
                               onMouseEnter: () => setHoveredLibraryKey(itemKey),
-                              onMouseLeave: () =>
-                                setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                              onMouseLeave: () => setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
                             }
                           : {})}
                       >
-                        <View style={styles.inLibraryBadge}>
-                          <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
-                        </View>
-                        {isWeb && hoveredLibraryKey === itemKey ? (
-                          <View style={styles.iconTooltip}>
-                            <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                        {isInOwnLibrary ? (
+                          <View style={styles.inLibraryBadgeWrap}>
+                            <View style={styles.inLibraryBadge}>
+                              <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                            </View>
+                            {isWeb && hoveredLibraryKey === itemKey ? (
+                              <View style={styles.iconTooltip}>
+                                <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                              </View>
+                            ) : null}
                           </View>
                         ) : null}
+                        <Image
+                          source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
+                          style={[styles.galleryPoster, isWebMobile && styles.galleryPosterWebMobile]}
+                          resizeMode="cover"
+                        />
+                        <Text
+                          numberOfLines={2}
+                          style={[
+                            styles.galleryTitle,
+                            isWebMobile && styles.galleryTitleWebMobile,
+                            { color: isDark ? '#E5E7EB' : '#0F172A' },
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.galleryMeta, isWebMobile && styles.galleryMetaWebMobile, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                          {item.rating ? `⭐ ${item.rating.toFixed(1)}` : 'Sin rating'}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            ) : (
+              items.map((item, index) => {
+                const itemKey = `${type}-${item.id}`;
+                const isInOwnLibrary = ownLibraryKeys.has(itemKey);
+                const start = Math.min(index * 0.05, 0.62);
+                const end = Math.min(start + 0.26, 1);
+                return (
+                  <Animated.View
+                    key={item.id}
+                    onLayout={(event) => {
+                      const { y, height } = event.nativeEvent.layout;
+                      const previous = itemLayoutsRef.current.get(item.id);
+                      itemLayoutsRef.current.set(item.id, { y, height });
+                      if (
+                        pendingRestoreItemId != null &&
+                        item.id === pendingRestoreItemId &&
+                        (!previous || previous.y !== y || previous.height !== height)
+                      ) {
+                        logRecentScroll(type, 'pending-anchor-layout-updated', {
+                          pendingRestoreItemId,
+                          itemId: item.id,
+                          y,
+                          height,
+                        });
+                        setRestoreRetryTick((prev) => prev + 1);
+                      }
+                    }}
+                    style={{
+                      opacity: entranceAnim.interpolate({
+                        inputRange: [start, end],
+                        outputRange: [0, 1],
+                        extrapolate: 'clamp',
+                      }),
+                      transform: [
+                        {
+                          translateY: entranceAnim.interpolate({
+                            inputRange: [start, end],
+                            outputRange: [14, 0],
+                            extrapolate: 'clamp',
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.item,
+                        isDark && styles.itemDark,
+                      ]}
+                      activeOpacity={0.75}
+                      onPress={() => router.push(`/${type}/${item.id}`)}
+                      {...(isWeb
+                        ? {
+                            onMouseEnter: () => setHoveredItemId(item.id),
+                            onMouseLeave: () => {
+                              setHoveredItemId(null);
+                              setHoveredLibraryKey(null);
+                            },
+                          }
+                        : {})}
+                    >
+                      {isInOwnLibrary ? (
+                        <View
+                          style={styles.inLibraryBadgeWrap}
+                          {...(isWeb
+                            ? {
+                                onMouseEnter: () => setHoveredLibraryKey(itemKey),
+                                onMouseLeave: () =>
+                                  setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                              }
+                            : {})}
+                        >
+                          <View style={styles.inLibraryBadge}>
+                            <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                          </View>
+                          {isWeb && hoveredLibraryKey === itemKey ? (
+                            <View style={styles.iconTooltip}>
+                              <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                      <View style={[styles.posterFrame, isWeb && hoveredItemId === item.id && styles.posterFrameHovered]}>
+                        <Image
+                          source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
+                          style={styles.poster}
+                          resizeMode="cover"
+                        />
                       </View>
-                    ) : null}
-                    <View style={[styles.posterFrame, isWeb && hoveredItemId === item.id && styles.posterFrameHovered]}>
-                      <Image
-                        source={item.imageUrl ? { uri: item.imageUrl } : FALLBACK_IMAGE}
-                        style={styles.poster}
-                        resizeMode="cover"
-                      />
-                    </View>
-                    <View style={styles.itemTextWrap}>
-                      <Text style={[styles.itemTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{item.name}</Text>
-                      <Text style={[styles.itemMeta, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                        {item.rating ? `⭐ ${item.rating.toFixed(1)}` : 'Sin rating'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            })}
+                      <View style={styles.itemTextWrap}>
+                        <Text style={[styles.itemTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{item.name}</Text>
+                        <Text style={[styles.itemMeta, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                          {item.rating ? `⭐ ${item.rating.toFixed(1)}` : 'Sin rating'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })
+            )}
 
             {hasMore && (
               <TouchableOpacity
@@ -963,9 +1083,36 @@ const styles = StyleSheet.create({
     maxWidth: 980,
     alignSelf: 'center',
   },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  viewModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  viewModeButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  viewModeText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   sortChips: {
     paddingVertical: 10,
     gap: 8,
+  },
+  sortScroll: {
+    flex: 1,
   },
   sortChip: {
     borderWidth: 1,
@@ -1034,6 +1181,69 @@ const styles = StyleSheet.create({
   posterFrameHovered: {
     boxShadow: '0 12px 24px rgba(2,6,23,0.28)',
     zIndex: 8,
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  galleryCard: {
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    position: 'relative',
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 12px 22px rgba(2,6,23,0.08)',
+        } as any)
+      : null),
+  },
+  galleryCardWebMobile: {
+    padding: 8,
+  },
+  galleryItemWrap: {
+    width: Platform.OS === 'web' ? '18.9%' : '48.4%',
+    marginBottom: 12,
+  },
+  galleryItemWrapWebMobile: {
+    width: '48.4%',
+  },
+  galleryCardDark: {
+    backgroundColor: '#111827',
+    borderColor: '#1F2937',
+  },
+  galleryPoster: {
+    width: '100%',
+    aspectRatio: 0.67,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  galleryPosterWebMobile: {
+    aspectRatio: 0.72,
+  },
+  galleryTitle: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    minHeight: 36,
+  },
+  galleryTitleWebMobile: {
+    fontSize: 12,
+    lineHeight: 16,
+    minHeight: 32,
+  },
+  galleryMeta: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  galleryMetaWebMobile: {
+    marginTop: 5,
+    fontSize: 11,
   },
   itemTextWrap: {
     marginLeft: 10,
