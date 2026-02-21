@@ -3,6 +3,9 @@ import { create } from 'zustand/index.js';
 import { createJSONStorage, persist } from 'zustand/middleware.js';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type LibraryFilterPreference = 'all' | 'movie' | 'tv' | 'game';
+export type LibrarySortPreference = 'recent' | 'oldest' | 'rating' | 'title' | 'status';
+export type LibraryViewPreference = 'list' | 'gallery';
 
 // Función para obtener el tema inicial según la plataforma
 function getInitialThemeMode(): ThemeMode {
@@ -28,6 +31,9 @@ interface PreferencesState {
   goalPeriodStatuses: Record<string, 'success' | 'fail'>;
   seenAchievementIds: string[];
   unlockedAchievementIds: string[];
+  libraryDefaultFilter: LibraryFilterPreference;
+  libraryDefaultSort: LibrarySortPreference;
+  libraryDefaultView: LibraryViewPreference;
   setUsername: (username: string) => void;
   setProfileAvatarUrl: (url: string | null) => void;
   setThemeMode: (mode: ThemeMode) => void;
@@ -46,6 +52,9 @@ interface PreferencesState {
   setGoalPeriodStatus: (key: string, status: 'success' | 'fail') => void;
   markAchievementSeen: (id: string) => void;
   unlockAchievement: (id: string) => void;
+  setLibraryDefaultFilter: (value: LibraryFilterPreference) => void;
+  setLibraryDefaultSort: (value: LibrarySortPreference) => void;
+  setLibraryDefaultView: (value: LibraryViewPreference) => void;
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -68,6 +77,9 @@ export const usePreferencesStore = create<PreferencesState>()(
       goalPeriodStatuses: {},
       seenAchievementIds: [],
       unlockedAchievementIds: [],
+      libraryDefaultFilter: 'all',
+      libraryDefaultSort: 'status',
+      libraryDefaultView: 'list',
       setUsername: (username) => set({ username }),
       setProfileAvatarUrl: (profileAvatarUrl) => set({ profileAvatarUrl }),
       setThemeMode: (themeMode) => set({ themeMode }),
@@ -107,6 +119,9 @@ export const usePreferencesStore = create<PreferencesState>()(
             ? state.unlockedAchievementIds
             : [...state.unlockedAchievementIds, id],
         })),
+      setLibraryDefaultFilter: (libraryDefaultFilter) => set({ libraryDefaultFilter }),
+      setLibraryDefaultSort: (libraryDefaultSort) => set({ libraryDefaultSort }),
+      setLibraryDefaultView: (libraryDefaultView) => set({ libraryDefaultView }),
     }),
     {
       name: 'flicksy-preferences',

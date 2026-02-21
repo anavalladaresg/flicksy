@@ -13,6 +13,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Fonts } from '@/constants/theme';
@@ -888,6 +889,8 @@ function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebMobile = isWeb && windowWidth < 860;
   const RootContainer = isWeb ? View : SafeAreaView;
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
@@ -1088,7 +1091,7 @@ function HomeScreen() {
 
   return (
     <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}> 
-      <ScrollView contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb]}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, isWeb && styles.scrollContentWeb, isWebMobile && styles.scrollContentWebMobile]}>
         <Animated.View
           style={[
             styles.hero,
@@ -1254,6 +1257,9 @@ const styles = StyleSheet.create({
     maxWidth: 1160,
     alignSelf: 'center',
     paddingTop: WEB_TOP_TABS_OFFSET,
+  },
+  scrollContentWebMobile: {
+    paddingTop: 0,
   },
   centered: {
     flex: 1,

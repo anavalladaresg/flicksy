@@ -14,6 +14,7 @@ import MagicLoader from '@/components/loaders/MagicLoader';
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 type Filter = 'all' | MediaType;
 type SortBy = 'recent' | 'oldest' | 'rating' | 'title' | 'status';
+type ViewMode = 'list' | 'gallery';
 
 const SORT_OPTIONS: { value: SortBy; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
   { value: 'recent', label: 'Reciente', icon: 'schedule' },
@@ -21,6 +22,10 @@ const SORT_OPTIONS: { value: SortBy; label: string; icon: keyof typeof MaterialI
   { value: 'title', label: 'A-Z', icon: 'sort-by-alpha' },
   { value: 'status', label: 'Estado', icon: 'flag' },
   { value: 'oldest', label: 'Antiguo', icon: 'history' },
+];
+const VIEW_MODE_OPTIONS: { value: ViewMode; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { value: 'list', label: 'Lista', icon: 'view-agenda' },
+  { value: 'gallery', label: 'Galería', icon: 'grid-view' },
 ];
 
 function resolvePoster(item: TrackedItem): string | null {
@@ -50,6 +55,13 @@ function getStatusColor(status: TrackedItem['status']) {
   return '#B91C1C';
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return 'sin fecha';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'sin fecha';
+  return parsed.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function FriendLibraryScreen() {
   const isDark = useColorScheme() === 'dark';
   const isWeb = Platform.OS === 'web';
@@ -59,6 +71,7 @@ function FriendLibraryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('status');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | number | null>(null);
   const [hoveredLibraryKey, setHoveredLibraryKey] = useState<string | null>(null);
@@ -117,6 +130,32 @@ function FriendLibraryScreen() {
     return copied;
   }, [items, filter, sortBy]);
 
+  function cycleViewMode() {
+    const index = VIEW_MODE_OPTIONS.findIndex((option) => option.value === viewMode);
+    const next = VIEW_MODE_OPTIONS[(index + 1) % VIEW_MODE_OPTIONS.length];
+    setViewMode(next.value);
+  }
+
+  function renderDateSummary(item: TrackedItem) {
+    if (item.mediaType === 'movie') {
+      if (item.watchedAtApproximate) return 'Visto: fecha no exacta';
+      const watched = item.watchedAt ? formatDate(item.watchedAt) : 'sin fecha';
+      return `Visto: ${watched}`;
+    }
+    if (
+      (item.startedAtApproximate && !item.startedAt) ||
+      (item.finishedAtApproximate && !item.finishedAt) ||
+      (item.startedAtApproximate && item.finishedAtApproximate)
+    ) {
+      return 'Fechas: no exactas';
+    }
+    const start = item.startedAt ? formatDate(item.startedAt) : 'sin inicio';
+    const end = item.finishedAt ? formatDate(item.finishedAt) : 'sin fin';
+    return `Inicio: ${start} · Fin: ${end}`;
+  }
+
+  const activeView = VIEW_MODE_OPTIONS.find((option) => option.value === viewMode) ?? VIEW_MODE_OPTIONS[0];
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
       <View style={[styles.header, isWeb && styles.headerWeb]}>
@@ -168,6 +207,9 @@ function FriendLibraryScreen() {
           </ScrollView>
 
           <View style={styles.sortAnchor}>
+            <TouchableOpacity style={[styles.viewButton, isDark && styles.sortButtonDark]} onPress={cycleViewMode}>
+              <MaterialIcons name={activeView.icon} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.sortButton, isDark && styles.sortButtonDark]} onPress={() => setIsSortOpen((prev) => !prev)}>
               <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
             </TouchableOpacity>
@@ -210,7 +252,78 @@ function FriendLibraryScreen() {
         {!isLoading && filtered.length === 0 ? (
           <Text style={[styles.emptyText, { color: isDark ? '#94A3B8' : '#64748B' }]}>Sin contenido reciente.</Text>
         ) : !isLoading ? (
-          filtered.map((item, index) => {
+          viewMode === 'gallery' ? (
+            <View style={styles.galleryGrid}>
+              {filtered.map((item) => {
+                const itemKey = `${item.mediaType}-${item.externalId}`;
+                const isInOwnLibrary = ownLibraryKeys.has(itemKey);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.galleryCard,
+                      isDark && styles.cardDark,
+                      isWeb && styles.cardWeb,
+                      isWeb && hoveredCardId === item.id && styles.cardWebHovered,
+                    ]}
+                    onPress={() =>
+                      router.push({
+                        pathname: `/${item.mediaType}/${item.externalId}` as any,
+                        params: {
+                          fromFriendId: id,
+                          fromFriendName: name || 'Amigo/a',
+                        },
+                      })
+                    }
+                    {...(isWeb
+                      ? {
+                          onMouseEnter: () => setHoveredCardId(item.id),
+                          onMouseLeave: () => {
+                            setHoveredCardId(null);
+                            setHoveredLibraryKey(null);
+                          },
+                        }
+                      : {})}
+                  >
+                    <Image source={resolvePoster(item) ? { uri: resolvePoster(item) as string } : FALLBACK_IMAGE} style={styles.galleryPoster} resizeMode="cover" />
+                    <Text numberOfLines={2} style={[styles.galleryTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>{item.title}</Text>
+                    <View style={styles.galleryMetaRow}>
+                      <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: '#FFFFFF' }]}>
+                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{statusLabel(item.status)}</Text>
+                      </View>
+                      <Text style={[styles.friendRating, { color: isDark ? '#FBBF24' : '#B45309' }]}>
+                        {typeof item.rating === 'number' ? `★ ${item.rating.toFixed(1)}` : '★ -'}
+                      </Text>
+                    </View>
+                    <Text numberOfLines={2} style={[styles.galleryDateSummary, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                      {renderDateSummary(item)}
+                    </Text>
+                    {isInOwnLibrary ? (
+                      <View
+                        style={styles.inLibraryBadgeWrap}
+                        {...(isWeb
+                          ? {
+                              onMouseEnter: () => setHoveredLibraryKey(itemKey),
+                              onMouseLeave: () =>
+                                setHoveredLibraryKey((prev) => (prev === itemKey ? null : prev)),
+                            }
+                          : {})}
+                      >
+                        <View style={styles.inLibraryBadge}>
+                          <MaterialIcons name="library-add-check" size={14} color="#E0F2FE" />
+                        </View>
+                        {isWeb && hoveredLibraryKey === itemKey ? (
+                          <View style={styles.iconTooltip}>
+                            <Text numberOfLines={1} style={styles.iconTooltipText}>Ya añadido</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : filtered.map((item, index) => {
             const previous = filtered[index - 1];
             const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
             const itemKey = `${item.mediaType}-${item.externalId}`;
@@ -417,6 +530,19 @@ const styles = StyleSheet.create({
   sortAnchor: {
     position: 'relative',
     zIndex: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewButton: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sortButton: {
     borderWidth: 1,
@@ -481,6 +607,48 @@ const styles = StyleSheet.create({
   contentWeb: {
     paddingHorizontal: 16,
   },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  galleryCard: {
+    width: Platform.OS === 'web' ? '15.8%' : '48.5%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    marginBottom: 8,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  galleryPoster: {
+    width: '100%',
+    aspectRatio: 0.68,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  galleryTitle: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '800',
+    minHeight: 32,
+  },
+  galleryMetaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  galleryDateSummary: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    minHeight: 30,
+  },
   emptyText: { fontSize: 13, fontWeight: '600' },
   loadingWrap: {
     paddingVertical: 24,
@@ -519,13 +687,24 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     backgroundColor: '#111827',
   },
+  cardCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
   poster: {
     width: 56,
     height: 84,
     borderRadius: 8,
     backgroundColor: '#E2E8F0',
   },
+  posterCompact: {
+    width: 46,
+    height: 68,
+  },
   meta: { flex: 1, justifyContent: 'center' },
+  metaCompact: {
+    minHeight: 68,
+  },
   itemTitle: { fontSize: 14, fontWeight: '800' },
   metaRow: {
     marginTop: 8,
