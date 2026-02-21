@@ -130,6 +130,7 @@ function previousPeriodDate(period: 'weekly' | 'monthly', from = new Date()): Da
 const PROFILE_DETAILS_LIMIT_WEB = 6;
 const PROFILE_DETAILS_LIMIT_NATIVE = 12;
 const PROFILE_SAVE_TIMEOUT_MS = 12000;
+const AVATAR_SYNC_TIMEOUT_MS = 5000;
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -172,6 +173,7 @@ function ProfileScreen() {
   const RootContainer = isWeb ? View : SafeAreaView;
   const { width: windowWidth } = useWindowDimensions();
   const useWebBento = isWeb && windowWidth >= 920;
+  const isWebMobile = isWeb && windowWidth < 860;
   const isCompactProfile = windowWidth < 640;
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
   const emailAddress = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
@@ -619,8 +621,15 @@ function ProfileScreen() {
     if (avatarOptions.length > 0) return;
     setAvatarLoading(true);
     try {
-      const options = await getAvatarOptions(220);
+      const options = await withTimeout(
+        getAvatarOptions(220),
+        PROFILE_SAVE_TIMEOUT_MS,
+        'La carga de avatares tardó demasiado. Reintenta.'
+      );
       setAvatarOptions(options);
+    } catch {
+      setAvatarOptions([]);
+      setFriendMessage('No se pudieron cargar los avatares ahora.');
     } finally {
       setAvatarLoading(false);
     }
@@ -640,7 +649,11 @@ function ProfileScreen() {
     const timeout = setTimeout(() => {
       void (async () => {
         try {
-          const results = await searchAvatarOptions(cleaned);
+          const results = await withTimeout(
+            searchAvatarOptions(cleaned),
+            PROFILE_SAVE_TIMEOUT_MS,
+            'La búsqueda de avatares tardó demasiado. Reintenta.'
+          );
           if (!cancelled) setAvatarSearchOptions(results);
         } catch {
           if (!cancelled) setAvatarSearchOptions([]);
@@ -659,35 +672,34 @@ function ProfileScreen() {
   async function handleSelectAvatar(nextAvatarUrl: string | null) {
     if (avatarSaving) return;
     setAvatarSaving(true);
-    showLoader({ text: 'Guardando avatar...', overlay: true, fullScreen: true, blur: true });
-    try {
-      const previous = profileAvatarUrl;
-      setProfileAvatarUrl(nextAvatarUrl);
-      setStoredProfileAvatarUrl(nextAvatarUrl);
-      const result = await withTimeout(
-        updateOwnAvatar(nextAvatarUrl),
-        PROFILE_SAVE_TIMEOUT_MS,
-        'La actualización del avatar tardó demasiado. Reintenta.'
-      );
-      if (result.ok) {
-        setFriendMessage(result.message);
-        setIsEditAvatarOpen(false);
-        return;
+    // Apply immediately in UI and sync remotely in background.
+    setProfileAvatarUrl(nextAvatarUrl);
+    setStoredProfileAvatarUrl(nextAvatarUrl);
+    setIsEditAvatarOpen(false);
+    setFriendMessage('Foto actualizada.');
+
+    void (async () => {
+      try {
+        const result = await withTimeout(
+          updateOwnAvatar(nextAvatarUrl),
+          AVATAR_SYNC_TIMEOUT_MS,
+          'La sincronización del avatar tardó demasiado. Reintenta.'
+        );
+        if (result.ok) {
+          setFriendMessage(result.message);
+          return;
+        }
+        if (result.message.includes('no soporta foto personalizada')) {
+          setFriendMessage('Foto guardada en este dispositivo. Para sincronizar entre dispositivos, añade avatar_url en Supabase.');
+          return;
+        }
+        setFriendMessage(result.message || 'No se pudo sincronizar la foto en la nube.');
+      } catch {
+        setFriendMessage('Foto aplicada. La sincronización en la nube se completará cuando haya mejor conexión.');
+      } finally {
+        setAvatarSaving(false);
       }
-      if (result.message.includes('no soporta foto personalizada')) {
-        setFriendMessage('Foto guardada en este dispositivo. Para sincronizar entre dispositivos, añade avatar_url en Supabase.');
-        setIsEditAvatarOpen(false);
-        return;
-      }
-      setProfileAvatarUrl(previous);
-      setStoredProfileAvatarUrl(previous);
-      setFriendMessage(result.message);
-    } catch (error: any) {
-      setFriendMessage(error?.message || 'No se pudo guardar la foto de perfil ahora.');
-    } finally {
-      setAvatarSaving(false);
-      hideLoader();
-    }
+    })();
   }
 
   async function handleRespondRequest(requestId: string, decision: 'accepted' | 'declined') {
@@ -717,6 +729,7 @@ function ProfileScreen() {
           styles.content,
           isCompactProfile && styles.contentCompact,
           isWeb && styles.contentWeb,
+          isWebMobile && styles.contentWebMobileNoTop,
           isWeb && !useWebBento && styles.contentWebMobile,
         ]}
       >
@@ -1032,32 +1045,34 @@ function ProfileScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            {avatarLoading || avatarSearchLoading ? (
-              <View style={styles.avatarLoadingWrap}>
-                <MagicLoader size={26} color="#0E7490" secondaryColor="#A5F3FC" />
-              </View>
-            ) : (
-              <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
-                {(avatarSearchQuery.trim().length >= 2 ? avatarSearchOptions : avatarOptions).map((avatar) => (
-                  <TouchableOpacity
-                    key={avatar.id}
-                    style={[
-                      styles.avatarOption,
-                      effectiveAvatarUrl === avatar.imageUrl && styles.avatarOptionActive,
-                      isDark && styles.avatarOptionDark,
-                    ]}
-                    onPress={() => void handleSelectAvatar(avatar.imageUrl)}
-                  >
-                    <UserAvatar avatarUrl={avatar.imageUrl} size={62} isDark={isDark} />
-                  </TouchableOpacity>
-                ))}
-                {avatarSearchQuery.trim().length >= 2 && avatarSearchOptions.length === 0 ? (
-                  <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B', width: '100%', textAlign: 'center' }]}>
-                    Sin resultados para esa búsqueda.
-                  </Text>
-                ) : null}
-              </ScrollView>
-            )}
+            <View style={styles.avatarResultsArea}>
+              {avatarLoading || avatarSearchLoading ? (
+                <View style={styles.avatarLoadingWrap}>
+                  <MagicLoader size={26} color="#0E7490" secondaryColor="#A5F3FC" />
+                </View>
+              ) : (
+                <ScrollView style={styles.avatarResultsScroll} contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
+                  {(avatarSearchQuery.trim().length >= 2 ? avatarSearchOptions : avatarOptions).map((avatar) => (
+                    <TouchableOpacity
+                      key={avatar.id}
+                      style={[
+                        styles.avatarOption,
+                        effectiveAvatarUrl === avatar.imageUrl && styles.avatarOptionActive,
+                        isDark && styles.avatarOptionDark,
+                      ]}
+                      onPress={() => void handleSelectAvatar(avatar.imageUrl)}
+                    >
+                      <UserAvatar avatarUrl={avatar.imageUrl} size={62} isDark={isDark} />
+                    </TouchableOpacity>
+                  ))}
+                  {avatarSearchQuery.trim().length >= 2 && avatarSearchOptions.length === 0 ? (
+                    <Text style={[styles.helpText, { color: isDark ? '#94A3B8' : '#64748B', width: '100%', textAlign: 'center' }]}>
+                      Sin resultados para esa búsqueda.
+                    </Text>
+                  ) : null}
+                </ScrollView>
+              )}
+            </View>
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalCancel, isDark && styles.modalCancelDark]} onPress={() => setIsEditAvatarOpen(false)}>
                 <Text style={[styles.modalCancelText, isDark && styles.modalCancelTextDark]}>Cerrar</Text>
@@ -1089,6 +1104,9 @@ const styles = StyleSheet.create({
     maxWidth: 1160,
     alignSelf: 'center',
     paddingTop: WEB_TOP_TABS_OFFSET,
+  },
+  contentWebMobileNoTop: {
+    paddingTop: 0,
   },
   contentWebMobile: {
     gap: 16,
@@ -1633,9 +1651,16 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   avatarLoadingWrap: {
-    paddingVertical: 20,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarResultsArea: {
+    marginTop: 10,
+    height: 360,
+  },
+  avatarResultsScroll: {
+    flex: 1,
   },
   avatarSearchInput: {
     borderWidth: 1,
@@ -1675,7 +1700,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B1220',
   },
   avatarGrid: {
-    paddingTop: 12,
+    paddingTop: 2,
     paddingBottom: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',

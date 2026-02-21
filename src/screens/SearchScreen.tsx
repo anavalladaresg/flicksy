@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Fonts } from '@/constants/theme';
@@ -84,6 +85,8 @@ function SearchScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebMobile = isWeb && windowWidth < 860;
   const RootContainer = isWeb ? View : SafeAreaView;
 
   const [query, setQuery] = useState('');
@@ -336,7 +339,7 @@ function SearchScreen() {
 
   return (
     <RootContainer style={[styles.container, { backgroundColor: palette.background }]}> 
-      <View style={[styles.headerWrap, isWeb && styles.headerWrapWebOffset]}>
+      <View style={[styles.headerWrap, isWeb && styles.headerWrapWebOffset, isWebMobile && styles.headerWrapWebMobile]}>
       <View
         style={[
           styles.header,
@@ -621,6 +624,9 @@ const styles = StyleSheet.create({
   },
   headerWrapWebOffset: {
     paddingTop: WEB_TOP_TABS_OFFSET + 12,
+  },
+  headerWrapWebMobile: {
+    paddingTop: 0,
   },
   headerWeb: {
     width: '100%',

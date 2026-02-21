@@ -22,12 +22,14 @@ import { CalendarInput } from '../components/common/CalendarInput';
 import { TMDB_IMAGE_BASE_URL } from '../constants/config';
 import { gameRepository } from '../features/games/data/repositories';
 import { useEscapeClose } from '../hooks/use-escape-close';
+import { usePreferencesStore } from '../store/preferences';
 import { useTrackingStore } from '../store/tracking';
 import { MediaType, TrackedItem } from '../types';
 import { formatDate, getMediaIcon, getStatusColor } from '../utils/helpers';
 
 type Filter = 'all' | MediaType;
 type SortBy = 'recent' | 'oldest' | 'rating' | 'title' | 'status';
+type ViewMode = 'list' | 'gallery';
 
 const FALLBACK_IMAGE = require('../../assets/images/icon.png');
 
@@ -37,6 +39,11 @@ const SORT_OPTIONS: { value: SortBy; label: string; icon: keyof typeof MaterialI
   { value: 'title', label: 'A-Z', icon: 'sort-by-alpha' },
   { value: 'status', label: 'Estado', icon: 'flag' },
   { value: 'oldest', label: 'Antiguo', icon: 'history' },
+];
+
+const VIEW_MODE_OPTIONS: { value: ViewMode; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { value: 'list', label: 'Lista', icon: 'view-agenda' },
+  { value: 'gallery', label: 'Galería', icon: 'grid-view' },
 ];
 
 const STATUS_COLORS: Record<TrackedItem['status'], string> = {
@@ -186,8 +193,15 @@ function TrackedScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const isWebMobile = isWeb && windowWidth < 920;
   const router = useRouter();
-  const [filter, setFilter] = useState<Filter>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('status');
+  const storedLibraryFilter = usePreferencesStore((state) => state.libraryDefaultFilter);
+  const storedLibrarySort = usePreferencesStore((state) => state.libraryDefaultSort);
+  const storedLibraryView = usePreferencesStore((state) => state.libraryDefaultView);
+  const setLibraryDefaultFilter = usePreferencesStore((state) => state.setLibraryDefaultFilter);
+  const setLibraryDefaultSort = usePreferencesStore((state) => state.setLibraryDefaultSort);
+  const setLibraryDefaultView = usePreferencesStore((state) => state.setLibraryDefaultView);
+  const [filter, setFilter] = useState<Filter>(storedLibraryFilter);
+  const [sortBy, setSortBy] = useState<SortBy>(storedLibrarySort);
+  const [viewMode, setViewMode] = useState<ViewMode>(storedLibraryView);
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | number | null>(null);
   const sortButtonRef = useRef<View | null>(null);
@@ -319,6 +333,28 @@ function TrackedScreen() {
   useEscapeClose(Boolean(editingItem), () => setEditingItem(null));
   useEscapeClose(Boolean(pendingDeleteItem), () => setPendingDeleteItem(null));
 
+  useEffect(() => {
+    setFilter(storedLibraryFilter);
+  }, [storedLibraryFilter]);
+
+  useEffect(() => {
+    setSortBy(storedLibrarySort);
+  }, [storedLibrarySort]);
+
+  useEffect(() => {
+    setViewMode(storedLibraryView);
+  }, [storedLibraryView]);
+
+  function updateFilter(next: Filter) {
+    setFilter(next);
+    setLibraryDefaultFilter(next);
+  }
+
+  function updateSort(next: SortBy) {
+    setSortBy(next);
+    setLibraryDefaultSort(next);
+  }
+
   function requestDelete(item: TrackedItem) {
     setPendingDeleteItem(item);
   }
@@ -361,10 +397,19 @@ function TrackedScreen() {
     setIsSortOpen((prev) => !prev);
   }
 
+  function cycleViewMode() {
+    const index = VIEW_MODE_OPTIONS.findIndex((option) => option.value === viewMode);
+    const next = VIEW_MODE_OPTIONS[(index + 1) % VIEW_MODE_OPTIONS.length];
+    setViewMode(next.value);
+    setLibraryDefaultView(next.value);
+  }
+
+  const activeView = VIEW_MODE_OPTIONS.find((option) => option.value === viewMode) ?? VIEW_MODE_OPTIONS[0];
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <RootContainer style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#F8FAFC' }]}>
-        <View style={[styles.topSection, isWeb && styles.topSectionWeb]}>
+        <View style={[styles.topSection, isWeb && styles.topSectionWeb, isWebMobile && styles.topSectionWebMobile]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Biblioteca</Text>
             <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>{counters.all} guardados</Text>
@@ -373,24 +418,24 @@ function TrackedScreen() {
           <View style={styles.controls}>
             <View style={styles.filterBar}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'all' && styles.filterChipActive]} onPress={() => updateFilter('all')}>
                   <MaterialIcons name="apps" size={14} color={filter === 'all' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'movie' && styles.filterChipActive]} onPress={() => setFilter('movie')}>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'movie' && styles.filterChipActive]} onPress={() => updateFilter('movie')}>
                   <MaterialIcons name="movie" size={14} color={filter === 'movie' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
                   <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'movie' && styles.filterTextActive]}>Películas</Text>
                   <View style={styles.chipCounter}>
                     <Text style={styles.chipCounterText}>{counters.movie}</Text>
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'tv' && styles.filterChipActive]} onPress={() => setFilter('tv')}>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'tv' && styles.filterChipActive]} onPress={() => updateFilter('tv')}>
                   <MaterialIcons name="tv" size={14} color={filter === 'tv' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
                   <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'tv' && styles.filterTextActive]}>Series</Text>
                   <View style={styles.chipCounter}>
                     <Text style={styles.chipCounterText}>{counters.tv}</Text>
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'game' && styles.filterChipActive]} onPress={() => setFilter('game')}>
+                <TouchableOpacity style={[styles.filterChip, isDark && styles.filterChipDark, filter === 'game' && styles.filterChipActive]} onPress={() => updateFilter('game')}>
                   <MaterialIcons name="sports-esports" size={14} color={filter === 'game' ? '#FFFFFF' : isDark ? '#CBD5E1' : '#334155'} />
                   <Text style={[styles.filterText, isDark && styles.filterTextDark, filter === 'game' && styles.filterTextActive]}>Juegos</Text>
                   <View style={styles.chipCounter}>
@@ -400,6 +445,9 @@ function TrackedScreen() {
               </ScrollView>
 
               <View style={styles.sortAnchor} ref={sortButtonRef}>
+                <TouchableOpacity style={[styles.viewButton, isDark && styles.sortButtonDark]} onPress={cycleViewMode}>
+                  <MaterialIcons name={activeView.icon} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
+                </TouchableOpacity>
                 <TouchableOpacity style={[styles.sortButton, isDark && styles.sortButtonDark]} onPress={toggleSortMenu}>
                   <MaterialIcons name={isSortOpen ? 'tune' : 'filter-list'} size={16} color={isDark ? '#E5E7EB' : '#0F172A'} />
                 </TouchableOpacity>
@@ -413,7 +461,7 @@ function TrackedScreen() {
                           key={option.value}
                           style={[styles.sortMenuItem, active && styles.sortMenuItemActive]}
                           onPress={() => {
-                            setSortBy(option.value);
+                            updateSort(option.value);
                             setIsSortOpen(false);
                           }}
                         >
@@ -440,7 +488,7 @@ function TrackedScreen() {
                       key={option.value}
                       style={[styles.sortMenuItem, active && styles.sortMenuItemActive]}
                       onPress={() => {
-                        setSortBy(option.value);
+                        updateSort(option.value);
                         setIsSortOpen(false);
                       }}
                     >
@@ -461,7 +509,62 @@ function TrackedScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={[styles.list, isWeb && styles.listWeb]}>
-            {filtered.map((item, index) => {
+            {viewMode === 'gallery' ? (
+              <View style={styles.galleryGrid}>
+                {filtered.map((item) => {
+                  const galleryCard = (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[
+                        styles.galleryCard,
+                        isWebMobile && styles.galleryCardWebMobile,
+                        isDark && styles.cardDark,
+                        isWeb && styles.cardWeb,
+                        isWeb && hoveredCardId === item.id && styles.cardWebHovered,
+                      ]}
+                      activeOpacity={0.8}
+                      onPress={() => router.push(routeFromItem(item))}
+                      {...(isWeb
+                        ? {
+                            onMouseEnter: () => setHoveredCardId(item.id),
+                            onMouseLeave: () => setHoveredCardId(null),
+                          }
+                        : {})}
+                    >
+                      <Image
+                        source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE}
+                        style={[styles.galleryPoster, isWebMobile && styles.galleryPosterWebMobile]}
+                        resizeMode="cover"
+                      />
+                      <Text
+                        numberOfLines={isWebMobile ? 3 : 2}
+                        style={[
+                          styles.galleryTitle,
+                          (isWebMobile || !isWeb) && styles.galleryTitleNoReserveMobile,
+                          (isWebMobile || !isWeb) && styles.galleryTitleMobileCompact,
+                          isWebMobile && styles.galleryTitleWebMobile,
+                          { color: isDark ? '#E5E7EB' : '#0F172A' },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+                      <View style={[styles.galleryMetaRow, (isWebMobile || !isWeb) && styles.galleryMetaRowMobileCompact, isWebMobile && styles.galleryMetaRowWebMobile]}>
+                        <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: '#FFFFFF' }]}>
+                          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{statusLabel(item.status)}</Text>
+                        </View>
+                        <Text style={[styles.galleryRating, isWebMobile && styles.galleryRatingWebMobile, { color: isDark ? '#FBBF24' : '#B45309' }]}>
+                          {item.rating ? `★ ${item.rating.toFixed(1)}` : '★ -'}
+                        </Text>
+                      </View>
+                      <Text numberOfLines={isWebMobile ? 3 : 2} style={[styles.galleryDateSummary, isWebMobile && styles.galleryDateSummaryWebMobile, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                        {renderDateSummary(item)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                  return galleryCard;
+                })}
+              </View>
+            ) : filtered.map((item, index) => {
               const previous = filtered[index - 1];
               const showStatusSeparator = sortBy === 'status' && index > 0 && previous?.status !== item.status;
               const cardContent = (
@@ -481,7 +584,11 @@ function TrackedScreen() {
                       }
                     : {})}
                 >
-                  <Image source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE} style={styles.poster} resizeMode="cover" />
+                  <Image
+                    source={resolveTrackedPoster(item) ? { uri: resolveTrackedPoster(item) as string } : FALLBACK_IMAGE}
+                    style={styles.poster}
+                    resizeMode="cover"
+                  />
 
                   <View style={styles.content}>
                     <Text style={[styles.ratingCorner, isDark ? styles.ratingCornerDark : styles.ratingCornerLight]}>
@@ -719,6 +826,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingTop: WEB_TOP_TABS_OFFSET,
   },
+  topSectionWebMobile: {
+    paddingTop: 0,
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -808,6 +918,20 @@ const styles = StyleSheet.create({
   sortAnchor: {
     position: 'relative',
     zIndex: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewButton: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   sortButton: {
     borderWidth: 1,
@@ -901,6 +1025,88 @@ const styles = StyleSheet.create({
     maxWidth: 1160,
     alignSelf: 'center',
   },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  galleryCard: {
+    width: Platform.OS === 'web' ? '15.8%' : '48.5%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    marginBottom: 10,
+  },
+  galleryCardWebMobile: {
+    width: '48.5%',
+    padding: 10,
+  },
+  galleryPoster: {
+    width: '100%',
+    aspectRatio: 0.68,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  galleryPosterWebMobile: {
+    aspectRatio: 0.72,
+  },
+  galleryTitle: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    minHeight: 34,
+  },
+  galleryTitleMobileCompact: {
+    marginTop: 5,
+  },
+  galleryTitleNoReserveMobile: {
+    minHeight: 0,
+  },
+  galleryTitleWebMobile: {
+    marginTop: 9,
+    fontSize: 12,
+    lineHeight: 16,
+    minHeight: 0,
+  },
+  galleryMetaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  galleryMetaRowMobileCompact: {
+    marginTop: 0,
+  },
+  galleryMetaRowWebMobile: {
+    marginTop: 4,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    gap: 4,
+  },
+  galleryRating: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  galleryRatingWebMobile: {
+    fontSize: 11,
+  },
+  galleryDateSummary: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    minHeight: 30,
+  },
+  galleryDateSummaryWebMobile: {
+    marginTop: 5,
+    fontSize: 10.5,
+    lineHeight: 14,
+    minHeight: 40,
+  },
   statusSeparator: {
     height: 1,
     backgroundColor: '#E2E8F0',
@@ -940,6 +1146,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     borderColor: '#1F2937',
   },
+  cardCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
   swipeDelete: {
     backgroundColor: '#DC2626',
     justifyContent: 'center',
@@ -962,6 +1172,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#E2E8F0',
   },
+  posterCompact: {
+    width: 54,
+    height: 78,
+  },
   content: {
     flex: 1,
     marginLeft: 10,
@@ -969,6 +1183,10 @@ const styles = StyleSheet.create({
     minHeight: 102,
     paddingTop: 2,
     paddingRight: 2,
+  },
+  contentCompact: {
+    minHeight: 78,
+    justifyContent: 'center',
   },
   ratingCorner: {
     position: 'absolute',
@@ -1009,6 +1227,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   statusBadge: {
     borderWidth: 1,
@@ -1024,6 +1244,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 11,
     color: '#64748B',
+  },
+  compactRating: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   itemActionsRow: {
     marginTop: 'auto',
