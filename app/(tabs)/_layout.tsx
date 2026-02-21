@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import React, { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, useWindowDimensions } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -13,10 +13,16 @@ import { supabase } from '@/src/services/supabase';
 import { getPendingFriendRequestsCount } from '@/src/services/social';
 import MagicLoader from '@/components/loaders/MagicLoader';
 
+const WEB_TOP_TABS_BREAKPOINT = 860;
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const sceneBackground = colorScheme === 'dark' ? '#0B1220' : '#F8FAFC';
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebMobile = isWeb && windowWidth < WEB_TOP_TABS_BREAKPOINT;
+  const useWebTopTabs = isWeb && !isWebMobile;
+  const useLargerMobileTabBar = !useWebTopTabs;
   const { isLoading, isSignedIn } = useAuthStatus();
   const { userId } = useAuth();
   const [pendingRequests, setPendingRequests] = useState(0);
@@ -64,7 +70,7 @@ export default function TabLayout() {
     return <Redirect href="/auth" />;
   }
 
-  const webTabBar = isWeb
+  const webTabBar = useWebTopTabs
     ? (props: Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0]) => (
         <DynamicTopTabs
           {...props}
@@ -85,13 +91,16 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarInactiveTintColor: colorScheme === 'dark' ? '#94A3B8' : '#64748B',
         headerShown: false,
-        tabBarButton: isWeb ? undefined : HapticTab,
-        tabBarPosition: isWeb ? 'top' : 'bottom',
-        tabBarStyle: isWeb
+        tabBarButton: useWebTopTabs ? undefined : HapticTab,
+        tabBarPosition: useWebTopTabs ? 'top' : 'bottom',
+        tabBarStyle: useWebTopTabs
           ? { display: 'none' }
           : {
               backgroundColor: colorScheme === 'dark' ? '#4d73b5' : '#FFFFFF',
               borderTopColor: colorScheme === 'dark' ? '#4170c2' : '#E2E8F0',
+              minHeight: useLargerMobileTabBar ? 64 : undefined,
+              paddingTop: useLargerMobileTabBar ? 6 : undefined,
+              paddingBottom: useLargerMobileTabBar ? 8 : undefined,
             },
       }}>
       <Tabs.Screen
