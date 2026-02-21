@@ -1106,7 +1106,7 @@ const styles = StyleSheet.create({
     paddingTop: WEB_TOP_TABS_OFFSET,
   },
   contentWebMobileNoTop: {
-    paddingTop: 0,
+    paddingTop: 12,
   },
   contentWebMobile: {
     gap: 16,

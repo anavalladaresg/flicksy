@@ -3,6 +3,7 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import React, { useEffect, useMemo } from 'react';
 import { Platform, Text, TextInput, View } from 'react-native';
 import 'react-native-reanimated';
@@ -179,6 +180,7 @@ function AchievementUnlockWatcher() {
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const appTheme = colorScheme === 'dark' ? FlicksyDarkTheme : FlicksyLightTheme;
+  const statusBarBackgroundColor = Platform.OS !== 'web' ? appTheme.colors.background : undefined;
   const { isLoading: isAuthLoading, isSignedIn } = useAuthStatus();
   const floatingModalOptions = Platform.OS === 'web'
     ? ({ presentation: 'transparentModal', animation: 'fade', headerShown: false, contentStyle: { backgroundColor: 'transparent' } } as const)
@@ -191,6 +193,11 @@ function RootLayoutContent() {
     if (!viewport) return;
     viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void SystemUI.setBackgroundColorAsync(appTheme.colors.background).catch(() => undefined);
+  }, [appTheme.colors.background]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -209,6 +216,39 @@ function RootLayoutContent() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof document === 'undefined') return;
+    const color = appTheme.colors.background;
+    const themeColorMetas = Array.from(
+      document.querySelectorAll('meta[name="theme-color"]')
+    ) as HTMLMetaElement[];
+    if (themeColorMetas.length === 0) {
+      const themeColorMeta = document.createElement('meta');
+      themeColorMeta.setAttribute('name', 'theme-color');
+      themeColorMeta.setAttribute('content', color);
+      document.head.appendChild(themeColorMeta);
+    } else {
+      themeColorMetas.forEach((meta) => meta.setAttribute('content', color));
+    }
+
+    let appleStatusMeta = document.querySelector(
+      'meta[name="apple-mobile-web-app-status-bar-style"]'
+    ) as HTMLMetaElement | null;
+    if (!appleStatusMeta) {
+      appleStatusMeta = document.createElement('meta');
+      appleStatusMeta.setAttribute('name', 'apple-mobile-web-app-status-bar-style');
+      document.head.appendChild(appleStatusMeta);
+    }
+    appleStatusMeta.setAttribute(
+      'content',
+      colorScheme === 'dark' ? 'black-translucent' : 'default'
+    );
+
+    document.documentElement.style.backgroundColor = color;
+    if (document.body) document.body.style.backgroundColor = color;
+  }, [appTheme.colors.background, colorScheme]);
+
+  useEffect(() => {
     if (isSignedIn) {
       void useTrackingStore.getState().bootstrapRemote();
     } else {
@@ -223,7 +263,11 @@ function RootLayoutContent() {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: appTheme.colors.background }}>
             <MagicLoader size={56} text="Cargando sesión..." />
           </View>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar
+            style={colorScheme === 'dark' ? 'light' : 'dark'}
+            backgroundColor={statusBarBackgroundColor}
+            translucent={Platform.OS === 'android' ? false : undefined}
+          />
         </ThemeProvider>
       </QueryProvider>
     );
@@ -246,7 +290,11 @@ function RootLayoutContent() {
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </Stack>
           <AchievementUnlockWatcher />
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar
+            style={colorScheme === 'dark' ? 'light' : 'dark'}
+            backgroundColor={statusBarBackgroundColor}
+            translucent={Platform.OS === 'android' ? false : undefined}
+          />
         </LoadingProvider>
       </ThemeProvider>
     </QueryProvider>

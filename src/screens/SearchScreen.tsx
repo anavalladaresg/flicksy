@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     paddingTop: WEB_TOP_TABS_OFFSET + 12,
   },
   headerWrapWebMobile: {
-    paddingTop: 0,
+    paddingTop: 4,
   },
   headerWeb: {
     width: '100%',

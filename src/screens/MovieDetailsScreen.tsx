@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
+    Alert,
     Image,
     Linking,
     Platform,
@@ -64,7 +65,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'completed'>('planned');
+  const [status, setStatus] = useState<'planned' | 'completed'>('completed');
   const [watchedAt, setWatchedAt] = useState('');
   const [watchedAtApproximate, setWatchedAtApproximate] = useState(false);
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
@@ -141,6 +142,29 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     if (!trailerUrl) return;
     const supported = await Linking.canOpenURL(trailerUrl);
     if (supported) await Linking.openURL(trailerUrl);
+  }
+
+  function requestDeleteTrackedMovie() {
+    if (!trackedMovieItem) return;
+    if (Platform.OS === 'web') {
+      const shouldDelete =
+        typeof window !== 'undefined' &&
+        window.confirm('¿Seguro que quieres eliminar esta película de tu biblioteca?');
+      if (shouldDelete) removeTrackedItem(trackedMovieItem.id);
+      return;
+    }
+    Alert.alert(
+      'Eliminar película',
+      '¿Seguro que quieres eliminar esta película de tu biblioteca?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => removeTrackedItem(trackedMovieItem.id),
+        },
+      ]
+    );
   }
 
   const handleConfirmAdd = () => {
@@ -256,10 +280,10 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
               style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
               onPress={() => {
                 if (trackedMovieItem) {
-                  removeTrackedItem(trackedMovieItem.id);
+                  requestDeleteTrackedMovie();
                 } else {
                   setRating(0);
-                  setStatus('planned');
+                  setStatus('completed');
                   setWatchedAt('');
                   setWatchedAtApproximate(false);
                   setIsRatingOpen(true);

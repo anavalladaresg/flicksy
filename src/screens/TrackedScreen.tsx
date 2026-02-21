@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
     paddingTop: WEB_TOP_TABS_OFFSET,
   },
   topSectionWebMobile: {
-    paddingTop: 0,
+    paddingTop: 4,
   },
   header: {
     paddingHorizontal: 16,

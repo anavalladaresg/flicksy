@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
 import {
+    Alert,
     Image,
     Linking,
     Platform,
@@ -64,7 +65,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const trackedItems = useTrackingStore((state) => state.items);
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('planned');
+  const [status, setStatus] = useState<'planned' | 'watching' | 'completed'>('completed');
   const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState('');
   const [startedAtApproximate, setStartedAtApproximate] = useState(false);
@@ -145,6 +146,29 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
     if (!trailerUrl) return;
     const supported = await Linking.canOpenURL(trailerUrl);
     if (supported) await Linking.openURL(trailerUrl);
+  }
+
+  function requestDeleteTrackedTV() {
+    if (!trackedTVItem) return;
+    if (Platform.OS === 'web') {
+      const shouldDelete =
+        typeof window !== 'undefined' &&
+        window.confirm('¿Seguro que quieres eliminar esta serie de tu biblioteca?');
+      if (shouldDelete) removeTrackedItem(trackedTVItem.id);
+      return;
+    }
+    Alert.alert(
+      'Eliminar serie',
+      '¿Seguro que quieres eliminar esta serie de tu biblioteca?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => removeTrackedItem(trackedTVItem.id),
+        },
+      ]
+    );
   }
 
   const handleConfirmAdd = () => {
@@ -263,10 +287,10 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
               style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
               onPress={() => {
                 if (trackedTVItem) {
-                  removeTrackedItem(trackedTVItem.id);
+                  requestDeleteTrackedTV();
                 } else {
                   setRating(0);
-                  setStatus('planned');
+                  setStatus('completed');
                   setStartedAt('');
                   setFinishedAt('');
                   setStartedAtApproximate(false);
