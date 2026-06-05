@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CalendarInput } from './CalendarInput';
 import { useEscapeClose } from '../../hooks/use-escape-close';
+import { getDetailPalette } from '../detail/detailTheme';
 
 interface StatusOption {
   value: string;
@@ -77,6 +78,7 @@ function RatingPickerModal({
   onConfirmAndGoBack,
 }: RatingPickerModalProps) {
   const isDark = useColorScheme() === 'dark';
+  const palette = getDetailPalette(isDark);
   const [starsWidth, setStarsWidth] = useState(0);
   const starsTrackRef = useRef<View | null>(null);
   const trackPageXRef = useRef(0);
@@ -96,13 +98,11 @@ function RatingPickerModal({
     return () => clearTimeout(timer);
   }, [measureTrack, visible]);
 
-  // Manejar scroll con rueda del ratón en web
   useEffect(() => {
     if (!visible || Platform.OS !== 'web') return;
-    
+
     const handleWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement;
-      // Buscar el contenedor del modal o el track de estrellas
       const modalContainer = target.closest('[data-stars-container]') || target.closest('[data-stars-track]');
       if (modalContainer && starsTrackRef.current) {
         e.preventDefault();
@@ -151,30 +151,43 @@ function RatingPickerModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View 
-          style={[styles.sheet, isDark && styles.sheetDark]} 
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: palette.elevated,
+              borderColor: palette.border,
+            },
+          ]}
           {...(Platform.OS === 'web' ? { 'data-stars-container': true } : {})}
         >
-          <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Valora: {title}</Text>
+          <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>
+            Valora: {title}
+          </Text>
 
           <View style={styles.statusBlock}>
-            <Text style={[styles.sectionLabel, { color: isDark ? '#CBD5E1' : '#334155' }]}>Estado</Text>
-            <View style={styles.statusRow}>
+            <Text style={[styles.sectionLabel, { color: palette.subtext }]}>Estado</Text>
+            <View style={[styles.segmentedTrack, { backgroundColor: palette.surface }]}>
               {statusOptions.map((option) => {
                 const active = status === option.value;
                 return (
                   <TouchableOpacity
                     key={option.value}
                     style={[
-                      styles.statusChip,
-                      isDark && styles.statusChipDark,
-                      { borderColor: option.color, backgroundColor: `${option.color}22` },
-                      active && { backgroundColor: `${option.color}CC`, borderColor: option.color },
-                      active && styles.statusChipActive,
+                      styles.segmentedOption,
+                      active && { backgroundColor: palette.brand },
+                      Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
                     ]}
                     onPress={() => onChangeStatus(option.value)}
+                    activeOpacity={0.85}
                   >
-                    <Text style={[styles.statusChipText, active && styles.statusChipTextActive, { color: active ? '#FFFFFF' : option.color }]}>
+                    <Text
+                      style={[
+                        styles.segmentedOptionText,
+                        { color: active ? '#FFFFFF' : palette.subtext },
+                      ]}
+                      numberOfLines={1}
+                    >
                       {option.label}
                     </Text>
                   </TouchableOpacity>
@@ -183,12 +196,17 @@ function RatingPickerModal({
             </View>
           </View>
 
-          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
-            {isInProgress ? 'Mi puntuación provisional' : 'Mi puntuación'} {value.toFixed(1)} / 10
-          </Text>
+          <View style={styles.ratingBlock}>
+            <Text style={[styles.ratingLabel, { color: palette.subtext }]}>
+              {isInProgress ? 'Mi puntuación provisional' : 'Mi puntuación'}
+            </Text>
+            <Text style={[styles.ratingValue, { color: palette.text }]}>
+              {value.toFixed(1)} <Text style={{ color: palette.subtext, fontWeight: '600' }}>/ 10</Text>
+            </Text>
+          </View>
 
           {isPlanned ? (
-            <Text style={[styles.dateHintText, { marginTop: 10, color: isDark ? '#94A3B8' : '#64748B' }]}>
+            <Text style={[styles.dateHintText, { color: palette.subtext }]}>
               En estado Pendiente no puedes añadir puntuación.
             </Text>
           ) : (
@@ -205,7 +223,7 @@ function RatingPickerModal({
               >
                 {Array.from({ length: 10 }, (_, idx) => idx + 1).map((index) => (
                   <View key={index} style={styles.starSlot}>
-                    <MaterialIcons name={iconNameFor(value, index)} size={23} color="#F59E0B" />
+                    <MaterialIcons name={iconNameFor(value, index)} size={20} color="#F59E0B" />
                   </View>
                 ))}
               </View>
@@ -221,9 +239,10 @@ function RatingPickerModal({
                 approximate={watchedAtApproximate}
                 onChangeApproximate={onChangeWatchedAtApproximate}
                 placeholder="Seleccionar"
+                tone="premium"
               />
             ) : dateMode === 'single' ? (
-              <Text style={[styles.dateHintText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+              <Text style={[styles.dateHintText, { color: palette.subtext }]}>
                 Cambia el estado a Completado para añadir fecha.
               </Text>
             ) : showRangeDates ? (
@@ -243,6 +262,7 @@ function RatingPickerModal({
                   onChangeFinishedAtApproximate?.(endApprox);
                 }}
                 placeholder="Seleccionar rango"
+                tone="premium"
               />
             ) : showStartOnlyDate ? (
               <CalendarInput
@@ -252,35 +272,45 @@ function RatingPickerModal({
                 approximate={startedAtApproximate}
                 onChangeApproximate={onChangeStartedAtApproximate}
                 placeholder="Seleccionar"
+                tone="premium"
               />
             ) : (
-              <Text style={[styles.dateHintText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+              <Text style={[styles.dateHintText, { color: palette.subtext }]}>
                 Cambia el estado a Viendo/Jugando o Completado para añadir fechas.
               </Text>
             )}
           </View>
-          {hasInvalidRange && (
-            <Text style={styles.rangeError}>
+
+          {hasInvalidRange ? (
+            <Text style={[styles.rangeError, { color: palette.danger }]}>
               La fecha de fin no puede ser anterior a la fecha de inicio.
             </Text>
-          )}
+          ) : null}
 
           <View style={styles.actions}>
-            <TouchableOpacity style={[styles.cancelButton, isDark && styles.cancelButtonDark]} onPress={onCancel}>
-              <Text style={styles.cancelText}>Cancelar</Text>
+            <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: palette.surface }]}
+              onPress={onCancel}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.cancelText, { color: palette.subtext }]}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.confirmButton, hasInvalidRange && styles.confirmButtonDisabled]}
+              style={[
+                styles.confirmButton,
+                { backgroundColor: palette.brand },
+                hasInvalidRange && styles.confirmButtonDisabled,
+              ]}
               onPress={() => {
                 onConfirm();
                 if (onConfirmAndGoBack) {
-                  // Pequeño delay para que se guarde antes de navegar
                   setTimeout(() => {
                     onConfirmAndGoBack();
                   }, 100);
                 }
               }}
               disabled={hasInvalidRange}
+              activeOpacity={0.85}
             >
               <Text style={styles.confirmText}>Guardar</Text>
             </TouchableOpacity>
@@ -294,143 +324,134 @@ function RatingPickerModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(5, 8, 12, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
+    ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(4px)' } as any) : null),
   },
   sheet: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 18,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 20,
     width: '100%',
-    maxWidth: 420,
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
-    }),
-  },
-  sheetDark: {
-    backgroundColor: '#111827',
+    maxWidth: 440,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 24px 48px rgba(0, 0, 0, 0.45)' } as any)
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity: 0.35,
+          shadowRadius: 24,
+          elevation: 12,
+        }),
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  subtitle: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
+    lineHeight: 25,
+    marginBottom: 4,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginBottom: 8,
   },
   statusBlock: {
-    marginTop: 14,
+    marginTop: 16,
   },
-  statusRow: {
-    marginTop: 6,
+  segmentedTrack: {
     flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
   },
-  statusChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
+  segmentedOption: {
+    flex: 1,
+    borderRadius: 9,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statusChipActive: {
-    borderWidth: 2,
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 6px 14px rgba(15, 23, 42, 0.22)',
-    }),
-  },
-  statusChipDark: {
-    backgroundColor: '#0F172A',
-  },
-  statusChipText: {
-    fontSize: 12,
+  segmentedOptionText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
   },
-  statusChipTextActive: {
-    color: '#FFFFFF',
+  ratingBlock: {
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  ratingLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ratingValue: {
+    fontSize: 20,
     fontWeight: '800',
   },
   starsRow: {
     marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
   },
   starsTrack: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 340,
     gap: 2,
   },
   starSlot: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   datesBlock: {
-    marginTop: 14,
+    marginTop: 16,
   },
   dateHintText: {
     fontSize: 12,
-    fontWeight: '600',
-  },
-  datesRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dateCol: {
-    flex: 1,
+    fontWeight: '500',
+    lineHeight: 18,
+    marginTop: 4,
   },
   actions: {
-    marginTop: 18,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 8,
+    gap: 10,
   },
   rangeError: {
     marginTop: 8,
     fontSize: 12,
-    color: '#DC2626',
     fontWeight: '600',
   },
   cancelButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  cancelButtonDark: {
-    backgroundColor: '#1F2937',
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 999,
   },
   cancelText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '600',
   },
   confirmButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#0E7490',
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 999,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   confirmButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    opacity: 0.45,
   },
   confirmText: {
     fontSize: 14,

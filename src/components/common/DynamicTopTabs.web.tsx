@@ -30,14 +30,13 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
 
   const colors = useMemo(
     () => ({
-      container: isDark ? 'rgba(30,41,59,0.18)' : 'rgba(255,255,255,0.7)',
-      border: isDark ? 'rgba(125,211,252,0.28)' : 'rgba(148,163,184,0.3)',
-      text: isDark ? '#E2E8F0' : '#0F172A',
-      mutedText: isDark ? '#94A3B8' : '#475569',
-      highlight: isDark ? 'rgba(125,211,252,0.2)' : 'rgba(14,116,144,0.14)',
-      glow: isDark ? 'rgba(56,189,248,0.35)' : 'rgba(14,116,144,0.22)',
-      ripple: isDark ? 'rgba(186,230,253,0.28)' : 'rgba(14,116,144,0.2)',
-      badge: '#EF4444',
+      container: isDark ? 'rgba(18,24,33,0.72)' : 'rgba(248,246,241,0.84)',
+      border: isDark ? 'rgba(42,53,69,0.68)' : 'rgba(122,112,96,0.16)',
+      text: isDark ? '#E6EDF3' : '#0F172A',
+      mutedText: isDark ? '#9FB0C3' : '#625F59',
+      highlight: isDark ? 'rgba(124,158,255,0.16)' : 'rgba(14,116,144,0.08)',
+      ripple: isDark ? 'rgba(124,158,255,0.18)' : 'rgba(14,116,144,0.12)',
+      badge: isDark ? '#FF7A7A' : '#EF4444',
     }),
     [isDark]
   );
@@ -80,12 +79,14 @@ function DynamicTopTabs({ state, descriptors, navigation, isDark, pendingRequest
           {
             backgroundColor: colors.container,
             borderColor: colors.border,
-            shadowColor: colors.glow,
           },
           Platform.OS === 'web'
             ? ({
-                backdropFilter: isDark ? 'none' : 'blur(16px)',
-                WebkitBackdropFilter: isDark ? 'none' : 'blur(16px)',
+                backdropFilter: 'blur(18px)',
+                WebkitBackdropFilter: 'blur(18px)',
+                boxShadow: isDark
+                  ? '0 16px 42px rgba(0,0,0,0.28), inset 0 1px 0 rgba(230,237,243,0.04)'
+                  : '0 16px 36px rgba(67,56,39,0.1), inset 0 1px 0 rgba(255,255,255,0.55)',
               } as any)
             : null,
         ]}
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 6,
     alignItems: 'center',
     zIndex: 120,
@@ -235,13 +236,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     overflow: 'hidden',
-    minHeight: 52,
+    minHeight: 48,
     alignSelf: 'center',
     width: '100%',
-    maxWidth: 680,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
+    maxWidth: 620,
   },
   containerCompact: {
     width: '100%',
@@ -259,9 +257,9 @@ const styles = StyleSheet.create({
     transitionTimingFunction: 'cubic-bezier(0.25,1,0.5,1)' as any,
   },
   itemSlot: {
-    width: 154,
+    width: 142,
     zIndex: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 4,
   },
   itemSlotCompact: {
@@ -271,7 +269,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 1,
   },
   itemButton: {
-    height: 44,
+    height: 40,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
@@ -281,9 +279,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   itemLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   itemLabelCompact: {
     fontSize: 11,
@@ -292,8 +290,8 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 8,
-    right: 14,
+    top: 7,
+    right: 13,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -308,9 +306,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -16,
     bottom: -16,
-    width: 180,
+    width: 150,
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#7C9EFF',
     zIndex: 0,
   },
 });

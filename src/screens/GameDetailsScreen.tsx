@@ -3,7 +3,12 @@
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DetailBodyLayout from '../components/detail/DetailBodyLayout';
+import DetailHero from '../components/detail/DetailHero';
+import DetailMyLibraryCard from '../components/detail/DetailMyLibraryCard';
+import { createDetailStyles } from '../components/detail/createDetailStyles';
+import { getDetailPalette } from '../components/detail/detailTheme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
@@ -39,6 +44,8 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 }) => {
   const RootContainer = Platform.OS === 'web' ? View : SafeAreaView;
   const isDark = useColorScheme() === 'dark';
+  const palette = getDetailPalette(isDark);
+  const detailStyles = useMemo(() => createDetailStyles(palette), [palette]);
   const { gameId, fromFriendId, fromFriendName } = route.params;
   const { data: game, isLoading, isError, refetch } = useGameDetails(gameId);
   const addTrackedItem = useTrackingStore((state) => state.addItem);
@@ -368,7 +375,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
   if (isLoading) {
     return (
-      <RootContainer style={styles.container}>
+      <RootContainer style={detailStyles.container}>
         <CenteredOverlay>
           <MagicLoader size={54} text="Cargando detalles..." />
         </CenteredOverlay>
@@ -378,7 +385,7 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
   if (isError) {
     return (
-      <RootContainer style={styles.container}>
+      <RootContainer style={detailStyles.container}>
         <ErrorMessage
           message="No se pudo cargar los detalles del videojuego"
           onRetry={() => refetch()}
@@ -389,193 +396,160 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 
   if (!game) {
     return (
-      <RootContainer style={styles.container}>
-        <Text>Videojuego no encontrado</Text>
+      <RootContainer style={detailStyles.container}>
+        <Text style={{ color: palette.text }}>Videojuego no encontrado</Text>
       </RootContainer>
     );
   }
 
   return (
-    <RootContainer style={[styles.container, isDark && styles.containerDark]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+    <RootContainer style={detailStyles.container}>
+      <ScrollView style={detailStyles.scrollView} contentContainerStyle={detailStyles.scrollContent} showsVerticalScrollIndicator={false}>
+        <DetailHero
+          imageUri={gameCoverUrl}
+          onBack={() => navigation.goBack()}
+          palette={palette}
+          dark={isDark}
+        />
+
+        <View style={detailStyles.content}>
+          <Text style={detailStyles.title}>{game.name}</Text>
+
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[styles.backButton, isDark && styles.backButtonDark]}
+            style={[detailStyles.primaryAction, isTracked && detailStyles.primaryActionTracked]}
+            activeOpacity={0.85}
+            onPress={() => {
+              if (isTracked && trackedGameItem) {
+                requestDeleteTrackedGame();
+                return;
+              }
+              setRating(0);
+              setStatus('completed');
+              setStartedAt('');
+              setFinishedAt('');
+              setStartedAtApproximate(false);
+              setFinishedAtApproximate(false);
+              setIsRatingOpen(true);
+            }}
           >
-            <MaterialIcons name="arrow-back" size={22} color={isDark ? '#E2E8F0' : '#0F172A'} />
-          </TouchableOpacity>
-        </View>
-
-        {gameCoverUrl && (
-          <View style={styles.backdropWrap}>
-            <Image
-              source={{
-                uri: gameCoverUrl,
-              }}
-              style={styles.backdrop}
-              resizeMode="cover"
+            <MaterialIcons
+              name={isTracked ? 'delete-outline' : 'add'}
+              size={18}
+              color={isTracked ? palette.danger : '#FFFFFF'}
             />
-            <View style={[styles.backdropOverlay, isDark && styles.backdropOverlayDark]} />
-          </View>
-        )}
+            <Text style={[detailStyles.primaryActionText, isTracked && detailStyles.primaryActionTextTracked]}>
+              {isTracked ? 'Eliminar de biblioteca' : 'Añadir a biblioteca'}
+            </Text>
+          </TouchableOpacity>
 
-        <View style={[styles.content, isDark && styles.contentDark]}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#333' }]}>{game.name}</Text>
-            <TouchableOpacity
-              style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
-              onPress={() => {
-                if (isTracked && trackedGameItem) {
-                  requestDeleteTrackedGame();
-                  return;
-                }
-                setRating(0);
-                setStatus('completed');
-                setStartedAt('');
-                setFinishedAt('');
-                setStartedAtApproximate(false);
-                setFinishedAtApproximate(false);
-                setIsRatingOpen(true);
-              }}
-            >
-              <MaterialIcons
-                name={isTracked ? 'delete' : 'add'}
-                size={18}
-                color={isTracked ? '#B91C1C' : '#FFFFFF'}
-              />
-              <Text style={[styles.inlineAddText, isTracked && styles.inlineAddTextTracked]}>
-                {isTracked ? 'Eliminar' : 'Añadir'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {isTracked && trackedGameItem && (
-            <View style={[styles.myDataCard, isDark && styles.myDataCardDark]}>
-              <TouchableOpacity style={[styles.editDataButton, isDark && styles.editDataButtonDark]} onPress={openEditor}>
-                <MaterialIcons name="edit" size={14} color="#0E7490" />
-              </TouchableOpacity>
-              <View style={styles.myDataTopRow}>
-                <View
-                  style={[
-                    styles.statusPill,
-                    isDark && styles.statusPillDark,
-                    {
-                      borderColor: statusTone((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing').border,
-                      backgroundColor: statusTone((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing').bg,
-                    },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="flag"
-                    size={13}
-                    color={statusTone((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing').color}
-                  />
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      { color: statusTone((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing').color },
-                    ]}
-                  >
-                    {statusLabel((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing')}
-                  </Text>
-                </View>
-                <Text style={[styles.ratingLine, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>⭐️ {ratingValue(trackedGameItem.rating ?? 0)}</Text>
+          <DetailBodyLayout
+            styles={detailStyles}
+            hasSidebar={Boolean((isTracked && trackedGameItem) || visibleFriendsRatings.length > 0 || (!trackedGameItem && friendTrackedItem))}
+            main={
+              <>
+          <View style={detailStyles.metaRow}>
+            {game.rating ? (
+              <View style={detailStyles.metaChip}>
+                <MaterialIcons name="star-outline" size={14} color={palette.subtext} />
+                <Text style={detailStyles.metaChipText}>{(game.rating / 10).toFixed(1)}/10</Text>
               </View>
-              <Text style={[styles.myDataDate, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                {formatShortDate(trackedGameItem.startedAt)} - {formatShortDate(trackedGameItem.finishedAt)}
-              </Text>
-            </View>
-          )}
-          {!trackedGameItem && friendTrackedItem && (
-            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
-              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-                {fromFriendName || 'Tu amigo/a'} ha puntuado este juego con{' '}
-                {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
-              </Text>
-            </View>
-          )}
-          <FriendsRatingsBlock itemLabel="juego" ratings={visibleFriendsRatings} />
-
-          <View style={styles.info}>
-            {game.rating && (
-              <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
-                <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>🌐 {(game.rating / 10).toFixed(1)}/10</Text>
+            ) : null}
+            {game.release_dates && game.release_dates.length > 0 ? (
+              <View style={detailStyles.metaChip}>
+                <MaterialIcons name="calendar-today" size={13} color={palette.subtext} />
+                <Text style={detailStyles.metaChipText}>{new Date(game.release_dates[0].date * 1000).getFullYear()}</Text>
               </View>
-            )}
-            {game.release_dates && game.release_dates.length > 0 && (
-              <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
-                <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>📅 {new Date(game.release_dates[0].date * 1000).getFullYear()}</Text>
-              </View>
-            )}
+            ) : null}
           </View>
 
-          {game.genres && game.genres.length > 0 && (
-            <View style={styles.genres}>
-              {game.genres.map((genre) => (
-                <View key={genre.id} style={styles.genreTag}>
-                  <Text style={styles.genreText}>{genre.name}</Text>
-                </View>
-              ))}
+          {game.genres && game.genres.length > 0 ? (
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>Géneros</Text>
+              <View style={detailStyles.chipRow}>
+                {game.genres.map((genre) => (
+                  <View key={genre.id} style={detailStyles.genreTag}>
+                    <Text style={detailStyles.genreText}>{genre.name}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          )}
+          ) : null}
 
-          {game.platforms && game.platforms.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#333' }]}>Plataformas</Text>
-              <View style={styles.platforms}>
+          {game.platforms && game.platforms.length > 0 ? (
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>Plataformas</Text>
+              <View style={detailStyles.chipRow}>
                 {game.platforms.map((platform) => (
-                  <View key={platform.id} style={styles.platformTag}>
-                    <Text style={styles.platformText}>{platform.name}</Text>
+                  <View key={platform.id} style={detailStyles.platformTag}>
+                    <Text style={detailStyles.platformText}>{platform.name}</Text>
                   </View>
                 ))}
               </View>
-            </>
-          )}
+            </View>
+          ) : null}
 
-          {developerStudios.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Estudio / Desarrollador</Text>
-              <View style={styles.platforms}>
+          {developerStudios.length > 0 ? (
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>Estudio / Desarrollador</Text>
+              <View style={detailStyles.chipRow}>
                 {developerStudios.map((studio) => (
-                  <View key={studio} style={[styles.platformTag, styles.developerTag]}>
-                    <Text style={[styles.platformText, styles.developerText]}>{studio}</Text>
+                  <View key={studio} style={detailStyles.platformTag}>
+                    <Text style={detailStyles.platformText}>{studio}</Text>
                   </View>
                 ))}
               </View>
-            </>
-          )}
+            </View>
+          ) : null}
 
-          {screenshotUrls.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Capturas</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.screenshotsRow}
-              >
+          {screenshotUrls.length > 0 ? (
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>Capturas</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={detailStyles.screenshotsRow}>
                 {screenshotUrls.map((url, index) => (
                   <TouchableOpacity key={`${url}-${index}`} activeOpacity={0.85} onPress={() => setSelectedScreenshotUrl(url)}>
-                    <Image source={{ uri: url }} style={styles.screenshotImage} resizeMode="cover" />
+                    <Image source={{ uri: url }} style={detailStyles.screenshotImage} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </>
-          )}
-
-          <>
-            <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Resumen</Text>
-            <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{summaryText}</Text>
             </View>
-          </>
+          ) : null}
 
-          <>
-            <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Historia</Text>
-            <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-              <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{storylineText}</Text>
-            </View>
-          </>
+          <View style={detailStyles.synopsisBlock}>
+            <Text style={detailStyles.sectionTitle}>Resumen</Text>
+            <Text style={detailStyles.synopsisText}>{summaryText}</Text>
+          </View>
 
+          <View style={detailStyles.synopsisBlock}>
+            <Text style={detailStyles.sectionTitle}>Historia</Text>
+            <Text style={detailStyles.synopsisText}>{storylineText}</Text>
+          </View>
+              </>
+            }
+            sidebar={
+              <>
+                {isTracked && trackedGameItem ? (
+                  <DetailMyLibraryCard
+                    palette={palette}
+                    styles={detailStyles}
+                    statusLabel={statusLabel((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing')}
+                    statusTone={statusTone((trackedGameItem.status as 'planned' | 'playing' | 'completed') || 'playing')}
+                    ratingText={ratingValue(trackedGameItem.rating ?? 0)}
+                    dateText={`${formatShortDate(trackedGameItem.startedAt)} – ${formatShortDate(trackedGameItem.finishedAt)}`}
+                    onEdit={openEditor}
+                  />
+                ) : null}
+                {!trackedGameItem && friendTrackedItem ? (
+                  <View style={detailStyles.friendHint}>
+                    <Text style={detailStyles.friendHintText}>
+                      {fromFriendName || 'Tu amigo/a'} ha puntuado este juego con{' '}
+                      {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
+                    </Text>
+                  </View>
+                ) : null}
+                <FriendsRatingsBlock itemLabel="juego" ratings={visibleFriendsRatings} variant="sidebar" />
+              </>
+            }
+          />
         </View>
       </ScrollView>
       <Modal
@@ -687,283 +661,6 @@ const GameDetailsScreen: React.FC<GameDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  containerDark: {
-    backgroundColor: '#111827',
-  },
-  scrollContent: {
-    paddingBottom: 26,
-  },
-  scrollView: {
-    ...(Platform.OS === 'web' ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any) : {}),
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(248,250,252,0.88)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.4)',
-  },
-  backButtonDark: {
-    backgroundColor: 'rgba(15,23,42,0.76)',
-    borderColor: 'rgba(100,116,139,0.46)',
-  },
-  backdrop: {
-    width: '100%',
-    height: 340,
-  },
-  backdropWrap: {
-    position: 'relative',
-  },
-  backdropOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.32)',
-  },
-  backdropOverlayDark: {
-    backgroundColor: 'rgba(2,6,23,0.52)',
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    marginTop: -30,
-    marginHorizontal: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    elevation: 8,
-  },
-  contentDark: {
-    borderColor: '#1E293B',
-    backgroundColor: '#0B1220',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
-  },
-  title: {
-    flex: 1,
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#333',
-    letterSpacing: 0.2,
-  },
-  inlineAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#0E7490',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  inlineAddButtonTracked: {
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1,
-    borderColor: '#B91C1C',
-  },
-  inlineAddText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  inlineAddTextTracked: {
-    color: '#B91C1C',
-  },
-  myDataCard: {
-    marginTop: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  myDataCardDark: {
-    backgroundColor: '#111827',
-    borderColor: '#334155',
-  },
-  friendDataCard: {
-    marginTop: 4,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  friendDataCardDark: {
-    backgroundColor: '#1F2937',
-    borderColor: '#92400E',
-  },
-  friendDataText: {
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  editDataButton: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ECFEFF',
-    borderWidth: 1,
-    borderColor: '#A5F3FC',
-    zIndex: 20,
-    elevation: 4,
-  },
-  editDataButtonDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
-  },
-  myDataTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#67E8F9',
-    backgroundColor: '#ECFEFF',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusPillDark: {
-    borderColor: '#334155',
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0E7490',
-  },
-  ratingLine: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  myDataDate: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  info: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  metaChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#CFFAFE',
-    backgroundColor: '#F0FDFF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  metaChipDark: {
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '700',
-  },
-  genres: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  genreTag: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  genreText: {
-    fontSize: 12,
-    color: '#0369A1',
-    fontWeight: '700',
-  },
-  platforms: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  platformTag: {
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  platformText: {
-    fontSize: 12,
-    color: '#6D28D9',
-    fontWeight: '700',
-  },
-  developerTag: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#C7D2FE',
-  },
-  developerText: {
-    color: '#3730A3',
-  },
-  screenshotsRow: {
-    gap: 10,
-    paddingBottom: 6,
-    marginBottom: 14,
-  },
-  screenshotImage: {
-    width: 220,
-    height: 124,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0F172A',
-  },
   screenshotModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(2,6,23,0.78)',
@@ -977,10 +674,10 @@ const styles = StyleSheet.create({
     maxWidth: 820,
     height: '78%',
     maxHeight: 760,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0B1220',
+    borderColor: '#2A3545',
+    backgroundColor: '#121821',
     overflow: 'hidden',
   },
   screenshotZoomControls: {
@@ -996,14 +693,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(15,23,42,0.84)',
+    backgroundColor: 'rgba(26, 35, 48, 0.92)',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#2A3545',
     alignItems: 'center',
     justifyContent: 'center',
   },
   screenshotZoomText: {
-    color: '#CBD5E1',
+    color: '#9FB0C3',
     fontSize: 12,
     fontWeight: '700',
     minWidth: 42,
@@ -1014,7 +711,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-    backgroundColor: '#020617',
+    backgroundColor: '#0B0F14',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -1027,41 +724,15 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(15,23,42,0.84)',
+    backgroundColor: 'rgba(26, 35, 48, 0.92)',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#2A3545',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
   },
   screenshotModalImage: {
     display: 'flex',
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    color: '#333',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  descriptionCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  descriptionCardDark: {
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#666',
   },
 });
 

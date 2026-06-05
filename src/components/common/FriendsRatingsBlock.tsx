@@ -1,30 +1,32 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendItemRating } from '../../services/social';
 import { useEscapeClose } from '../../hooks/use-escape-close';
+import { getDetailPalette } from '../detail/detailTheme';
 
 interface FriendsRatingsBlockProps {
   itemLabel: string;
   ratings: FriendItemRating[];
+  variant?: 'default' | 'sidebar';
 }
 
 function statusLabel(status: string) {
   if (status === 'watching') return 'Viendo';
   if (status === 'playing') return 'Jugando';
-  if (status === 'planned') return 'Pendiente';
+  if (status === 'planned') return 'En lista';
   if (status === 'completed') return 'Completado';
   if (status === 'dropped') return 'Abandonado';
   return status;
 }
 
-export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatingsBlockProps) {
+export default function FriendsRatingsBlock({ itemLabel, ratings, variant = 'default' }: FriendsRatingsBlockProps) {
   const isDark = useColorScheme() === 'dark';
+  const palette = getDetailPalette(isDark);
   const [expanded, setExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   useEscapeClose(isModalOpen, () => setIsModalOpen(false));
-  const article = itemLabel.trim().toLowerCase() === 'juego' ? 'este' : 'esta';
 
   const visible = useMemo(() => ratings.slice(0, expanded ? 5 : 3), [expanded, ratings]);
 
@@ -32,57 +34,84 @@ export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatin
 
   return (
     <>
-      <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-          Amigos han puntuado {article} {itemLabel}
-        </Text>
-        {visible.map((entry) => (
-          <View key={entry.friendId} style={[styles.row, isDark && styles.rowDark]}>
-            <Text style={[styles.name, { color: isDark ? '#E5E7EB' : '#0F172A' }]} numberOfLines={1}>
-              {entry.friendName}
+      <View style={[styles.section, variant === 'sidebar' && styles.sectionSidebar]}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.title, { color: palette.text }]}>Tus amigos</Text>
+          {variant !== 'sidebar' ? (
+            <Text style={[styles.subtitle, { color: palette.subtext }]}>
+              Quién ha visto {itemLabel === 'juego' ? 'este juego' : itemLabel === 'serie' ? 'esta serie' : 'esta película'}
             </Text>
-            <View style={styles.meta}>
-              <Text style={[styles.status, { color: isDark ? '#94A3B8' : '#64748B' }]}>{statusLabel(entry.status)}</Text>
-              <Text style={styles.rating}>{entry.rating.toFixed(1)} ⭐️</Text>
+          ) : null}
+        </View>
+
+        <View style={[styles.list, { backgroundColor: palette.elevated }]}>
+          {visible.map((entry, index) => (
+            <View
+              key={entry.friendId}
+              style={[
+                variant === 'sidebar' ? styles.rowSidebar : styles.row,
+                index < visible.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border },
+              ]}
+            >
+              <View style={styles.nameCol}>
+                <Text style={[styles.name, { color: palette.text }]} numberOfLines={1}>
+                  {entry.friendName}
+                </Text>
+                <Text style={[styles.status, { color: palette.subtext }]}>{statusLabel(entry.status)}</Text>
+              </View>
+              <Text style={[styles.rating, { color: palette.brand }]}>{entry.rating.toFixed(1)}</Text>
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
+
         <View style={styles.actions}>
           {ratings.length > 3 ? (
             <TouchableOpacity onPress={() => setExpanded((prev) => !prev)}>
-              <Text style={styles.actionText}>{expanded ? 'Mostrar menos' : 'Mostrar más'}</Text>
+              <Text style={[styles.actionText, { color: palette.brand }]}>
+                {expanded ? 'Mostrar menos' : 'Mostrar más'}
+              </Text>
             </TouchableOpacity>
           ) : (
             <View />
           )}
-          <TouchableOpacity onPress={() => setIsModalOpen(true)} style={styles.allBtn}>
-            <MaterialIcons name="groups" size={14} color="#0E7490" />
-            <Text style={styles.actionText}>Ver todos</Text>
+          <TouchableOpacity
+            onPress={() => setIsModalOpen(true)}
+            style={[styles.allBtn, Platform.OS === 'web' && ({ cursor: 'pointer' } as any)]}
+          >
+            <Text style={[styles.actionText, { color: palette.subtext }]}>Ver todos</Text>
+            <MaterialIcons name="chevron-right" size={16} color={palette.subtext} />
           </TouchableOpacity>
         </View>
       </View>
 
       <Modal visible={isModalOpen} transparent animationType="fade" onRequestClose={() => setIsModalOpen(false)}>
         <View style={styles.backdrop}>
-          <View style={[styles.modalCard, isDark && styles.modalCardDark]}>
+          <View style={[styles.modalCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
-                Puntuaciones de amigos
-              </Text>
+              <Text style={[styles.modalTitle, { color: palette.text }]}>Tus amigos</Text>
               <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                <MaterialIcons name="close" size={18} color={isDark ? '#E5E7EB' : '#0F172A'} />
+                <MaterialIcons name="close" size={20} color={palette.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 8 }}>
-              {ratings.map((entry) => (
-                <View key={`${entry.friendId}-${entry.rating}`} style={[styles.row, isDark && styles.rowDark]}>
-                  <Text style={[styles.name, { color: isDark ? '#E5E7EB' : '#0F172A' }]} numberOfLines={1}>
-                    {entry.friendName}
-                  </Text>
-                  <View style={styles.meta}>
-                    <Text style={[styles.status, { color: isDark ? '#94A3B8' : '#64748B' }]}>{statusLabel(entry.status)}</Text>
-                    <Text style={styles.rating}>{entry.rating.toFixed(1)} ⭐️</Text>
+            <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 0 }}>
+              {ratings.map((entry, index) => (
+                <View
+                  key={`${entry.friendId}-${entry.rating}`}
+                  style={[
+                    styles.row,
+                    index < ratings.length - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: palette.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.nameCol}>
+                    <Text style={[styles.name, { color: palette.text }]} numberOfLines={1}>
+                      {entry.friendName}
+                    </Text>
+                    <Text style={[styles.status, { color: palette.subtext }]}>{statusLabel(entry.status)}</Text>
                   </View>
+                  <Text style={[styles.rating, { color: palette.brand }]}>{entry.rating.toFixed(1)}</Text>
                 </View>
               ))}
             </ScrollView>
@@ -94,103 +123,102 @@ export default function FriendsRatingsBlock({ itemLabel, ratings }: FriendsRatin
 }
 
 const styles = StyleSheet.create({
-  card: {
+  section: {
     marginTop: 4,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    marginBottom: 8,
   },
-  cardDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#1E3A8A',
+  sectionSidebar: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  sectionHeader: {
+    marginBottom: 10,
+    gap: 3,
   },
   title: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  list: {
+    borderRadius: 14,
+    overflow: 'hidden',
   },
   row: {
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  rowSidebar: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  rowDark: {
-    borderColor: '#1E3A8A',
-    backgroundColor: '#111827',
+  nameCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   name: {
-    flex: 1,
     fontSize: 13,
-    fontWeight: '700',
-  },
-  meta: {
-    alignItems: 'flex-end',
+    fontWeight: '600',
   },
   status: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   rating: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0E7490',
+    fontSize: 13,
+    fontWeight: '700',
+    minWidth: 28,
+    textAlign: 'right',
   },
   actions: {
-    marginTop: 2,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   actionText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#0E7490',
+    fontWeight: '600',
   },
   allBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
   modalCard: {
     width: '100%',
-    maxWidth: 620,
+    maxWidth: 520,
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  modalCardDark: {
-    backgroundColor: '#111827',
-    borderColor: '#1F2937',
+    padding: 16,
   },
   modalHeader: {
-    marginBottom: 10,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });

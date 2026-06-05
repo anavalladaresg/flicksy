@@ -25,8 +25,8 @@ export const unstable_settings = {
 };
 
 let globalFontApplied = false;
-const APP_LIGHT_BACKGROUND = '#F8FAFC';
-const APP_DARK_BACKGROUND = '#0B1220';
+const APP_LIGHT_BACKGROUND = '#F1EFEA';
+const APP_DARK_BACKGROUND = '#0B0F14';
 
 const FlicksyLightTheme = {
   ...DefaultTheme,
@@ -34,8 +34,8 @@ const FlicksyLightTheme = {
     ...DefaultTheme.colors,
     primary: '#0E7490',
     background: APP_LIGHT_BACKGROUND,
-    card: '#FFFFFF',
-    border: '#E2E8F0',
+    card: '#F8F6F1',
+    border: '#DED8CC',
     text: '#0F172A',
   },
 };
@@ -44,27 +44,30 @@ const FlicksyDarkTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: '#38BDF8',
+    primary: '#7C9EFF',
     background: APP_DARK_BACKGROUND,
-    card: APP_DARK_BACKGROUND,
-    border: '#1E293B',
-    text: '#E2E8F0',
+    card: '#121821',
+    border: '#2A3545',
+    text: '#E6EDF3',
   },
 };
 
 export default function RootLayout() {
   if (!globalFontApplied) {
-    const globalFontFamily = (Platform.OS === 'web' ? Fonts.web?.sans : Fonts.sans) || 'System';
-    Text.defaultProps = Text.defaultProps || {};
-    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: globalFontFamily }];
-    TextInput.defaultProps = TextInput.defaultProps || {};
-    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: globalFontFamily }];
+    const fontTokens = Fonts as any;
+    const globalFontFamily = (Platform.OS === 'web' ? fontTokens.web?.sans : fontTokens.sans) || 'System';
+    const AppText = Text as any;
+    const AppTextInput = TextInput as any;
+    AppText.defaultProps = AppText.defaultProps || {};
+    AppText.defaultProps.style = [AppText.defaultProps.style, { fontFamily: globalFontFamily }];
+    AppTextInput.defaultProps = AppTextInput.defaultProps || {};
+    AppTextInput.defaultProps.style = [AppTextInput.defaultProps.style, { fontFamily: globalFontFamily }];
     globalFontApplied = true;
   }
 
   if (!isClerkConfigured) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B1220', paddingHorizontal: 20 }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B0F14', paddingHorizontal: 20 }}>
         <Text style={{ color: '#E5E7EB', fontSize: 14, textAlign: 'center' }}>
           Falta la configuración de Clerk. Añade EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY.
         </Text>
@@ -112,18 +115,18 @@ function metricDateForGame(item: any): string | null {
 }
 
 function AchievementUnlockWatcher() {
-  const trackedItems = useTrackingStore((state) => state.items);
-  const monthlyMovieGoal = usePreferencesStore((state) => state.monthlyMovieGoal);
-  const monthlyGameGoal = usePreferencesStore((state) => state.monthlyGameGoal);
-  const movieGoalPeriod = usePreferencesStore((state) => state.movieGoalPeriod);
-  const gameGoalPeriod = usePreferencesStore((state) => state.gameGoalPeriod);
-  const goalPeriodStatuses = usePreferencesStore((state) => state.goalPeriodStatuses);
-  const unlockedAchievementIds = usePreferencesStore((state) => state.unlockedAchievementIds);
-  const unlockAchievement = usePreferencesStore((state) => state.unlockAchievement);
+  const trackedItems = (useTrackingStore((state: any) => state.items) ?? []) as any[];
+  const monthlyMovieGoal = usePreferencesStore((state: any) => state.monthlyMovieGoal as number);
+  const monthlyGameGoal = usePreferencesStore((state: any) => state.monthlyGameGoal as number);
+  const movieGoalPeriod = usePreferencesStore((state: any) => state.movieGoalPeriod as 'weekly' | 'monthly');
+  const gameGoalPeriod = usePreferencesStore((state: any) => state.gameGoalPeriod as 'weekly' | 'monthly');
+  const goalPeriodStatuses = usePreferencesStore((state: any) => state.goalPeriodStatuses as Record<string, 'success' | 'fail'>);
+  const unlockedAchievementIds = usePreferencesStore((state: any) => state.unlockedAchievementIds as string[]);
+  const unlockAchievement = usePreferencesStore((state: any) => state.unlockAchievement as (id: string) => void);
 
   const topGenresCount = useMemo(() => {
     const unique = new Set<string>();
-    trackedItems.forEach((item) => item.genres?.forEach((genre) => unique.add(genre)));
+    trackedItems.forEach((item) => (item.genres as string[] | undefined)?.forEach((genre) => unique.add(genre)));
     return unique.size;
   }, [trackedItems]);
 
