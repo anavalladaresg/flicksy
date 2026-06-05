@@ -14,10 +14,14 @@ import { getPendingFriendRequestsCount } from '@/src/services/social';
 import MagicLoader from '@/components/loaders/MagicLoader';
 
 const WEB_TOP_TABS_BREAKPOINT = 860;
+const DARK_HOME_BACKGROUND = '#0B0F14';
+const LIGHT_HOME_BACKGROUND = '#F1EFEA';
+const DARK_BRAND = '#7C9EFF';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const sceneBackground = colorScheme === 'dark' ? '#0B1220' : '#F8FAFC';
+  const isDark = colorScheme === 'dark';
+  const sceneBackground = isDark ? DARK_HOME_BACKGROUND : LIGHT_HOME_BACKGROUND;
   const isWeb = Platform.OS === 'web';
   const { width: windowWidth } = useWindowDimensions();
   const isWebMobile = isWeb && windowWidth < WEB_TOP_TABS_BREAKPOINT;
@@ -60,7 +64,7 @@ export default function TabLayout() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colorScheme === 'dark' ? '#0B1220' : '#F8FAFC' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: sceneBackground }}>
         <MagicLoader size={52} text="Cargando..." />
       </View>
     );
@@ -74,9 +78,9 @@ export default function TabLayout() {
     ? (props: Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0]) => (
         <DynamicTopTabs
           {...props}
-          isDark={colorScheme === 'dark'}
+          isDark={isDark}
           pendingRequests={pendingRequests}
-          activeColor={Colors[colorScheme ?? 'light'].tint}
+          activeColor={isDark ? DARK_BRAND : Colors[colorScheme ?? 'light'].tint}
         />
       )
     : undefined;
@@ -88,8 +92,8 @@ export default function TabLayout() {
         sceneStyle: {
           backgroundColor: sceneBackground,
         },
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        tabBarInactiveTintColor: colorScheme === 'dark' ? '#94A3B8' : '#64748B',
+        tabBarActiveTintColor: isDark ? DARK_BRAND : Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor: isDark ? '#9FB0C3' : '#625F59',
         headerShown: false,
         tabBarButton: useWebTopTabs ? undefined : HapticTab,
         tabBarPosition: useWebTopTabs ? 'top' : 'bottom',
@@ -97,7 +101,7 @@ export default function TabLayout() {
           ? { display: 'none' }
           : {
               backgroundColor: sceneBackground,
-              borderTopColor: colorScheme === 'dark' ? '#1E293B' : '#E2E8F0',
+              borderTopColor: isDark ? '#2A3545' : '#DED8CC',
               minHeight: useLargerMobileTabBar ? 64 : undefined,
               paddingTop: useLargerMobileTabBar ? 6 : undefined,
               paddingBottom: useLargerMobileTabBar ? 8 : undefined,

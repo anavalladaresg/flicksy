@@ -24,6 +24,7 @@ import FriendsRatingsBlock from '../components/common/FriendsRatingsBlock';
 import { RatingPickerModal } from '../components/common/RatingPickerModal';
 import { useTVShowDetails } from '../features/tv/presentation/hooks';
 import { getFriendLibraryItem, getFriendsRatingsForItem, type FriendItemRating } from '../services/social';
+import { buildTMDBWatchUrl, resolveProviderLinksFromTMDBWatchPage } from '../services/tmdb-watch-links';
 import { useTrackingStore } from '../store/tracking';
 import type { TrackedItem } from '../types';
 
@@ -33,22 +34,28 @@ interface TVDetailsScreenProps {
 }
 
 type StreamProvider = { provider_id: number; provider_name: string; logo_path?: string | null };
+const DEBUG_WATCH_LINKS =
+  Boolean((globalThis as any).__DEV__) || process.env.EXPO_PUBLIC_DEBUG_WATCH_LINKS === 'true';
 
-function getStreamingProviders(payload: any): { region: string | null; providers: StreamProvider[] } {
+function getStreamingProviders(payload: any): { region: string | null; providers: StreamProvider[]; watchLink: string | null } {
   const byRegion = payload?.['watch/providers']?.results as Record<string, any> | undefined;
-  if (!byRegion) return { region: null, providers: [] };
+  if (!byRegion) return { region: null, providers: [], watchLink: null };
 
   const preferredRegions = ['ES', 'US'];
   for (const region of preferredRegions) {
     const flatrate = byRegion?.[region]?.flatrate;
     if (Array.isArray(flatrate) && flatrate.length > 0) {
-      return { region, providers: flatrate as StreamProvider[] };
+      return { region, providers: flatrate as StreamProvider[], watchLink: byRegion?.[region]?.link ?? null };
     }
   }
 
   const fallbackRegion = Object.keys(byRegion).find((key) => Array.isArray(byRegion?.[key]?.flatrate) && byRegion[key].flatrate.length > 0);
-  if (!fallbackRegion) return { region: null, providers: [] };
-  return { region: fallbackRegion, providers: byRegion[fallbackRegion].flatrate as StreamProvider[] };
+  if (!fallbackRegion) return { region: null, providers: [], watchLink: null };
+  return {
+    region: fallbackRegion,
+    providers: byRegion[fallbackRegion].flatrate as StreamProvider[],
+    watchLink: byRegion?.[fallbackRegion]?.link ?? null,
+  };
 }
 
 const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
@@ -70,6 +77,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const [finishedAt, setFinishedAt] = useState('');
   const [startedAtApproximate, setStartedAtApproximate] = useState(false);
   const [finishedAtApproximate, setFinishedAtApproximate] = useState(false);
+  const [providerLinks, setProviderLinks] = useState<Record<number, string>>({});
   const [friendTrackedItem, setFriendTrackedItem] = useState<TrackedItem | null>(null);
   const [friendsRatings, setFriendsRatings] = useState<FriendItemRating[]>([]);
 
@@ -142,10 +150,115 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
   const streaming = useMemo(() => getStreamingProviders(show), [show]);
   const trailerUrl = trailerVideo?.key ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
 
+  useEffect(() => {
+    if (!show?.id || streaming.providers.length === 0) {
+      setProviderLinks({});
+      if (DEBUG_WATCH_LINKS) {
+        console.log('[watch-links][tv] reset links', {
+          tvId: show?.id,
+          providers: streaming.providers.length,
+        });
+      }
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const links = await resolveProviderLinksFromTMDBWatchPage({
+        mediaType: 'tv',
+        mediaId: show.id,
+        providers: streaming.providers,
+        locale: 'ES',
+      });
+      if (!cancelled) {
+        setProviderLinks(links);
+        if (DEBUG_WATCH_LINKS) {
+          console.log('[watch-links][tv] resolved provider links', {
+            tvId: show.id,
+            providerCount: streaming.providers.length,
+            linksFound: Object.keys(links).length,
+            linkProviderIds: Object.keys(links),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [show?.id, streaming.providers]);
+
   async function openTrailer() {
     if (!trailerUrl) return;
     const supported = await Linking.canOpenURL(trailerUrl);
     if (supported) await Linking.openURL(trailerUrl);
+  }
+
+  async function openExternalUrl(url: string): Promise<boolean> {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function openProviderLink(provider: StreamProvider) {
+    if (!show?.id) return;
+
+    let directProviderUrl = providerLinks[provider.provider_id];
+    const fallbackWatchUrl = streaming.watchLink || buildTMDBWatchUrl('tv', show.id, 'ES');
+    if (DEBUG_WATCH_LINKS) {
+      console.log('[watch-links][tv] chip tap', {
+        tvId: show.id,
+        providerId: provider.provider_id,
+        providerName: provider.provider_name,
+        hasDirectProviderUrl: Boolean(directProviderUrl),
+        directProviderUrl,
+        fallbackWatchUrl,
+      });
+    }
+
+    if (!directProviderUrl && streaming.providers.length > 0) {
+      const refreshedLinks = await resolveProviderLinksFromTMDBWatchPage({
+        mediaType: 'tv',
+        mediaId: show.id,
+        providers: streaming.providers,
+        locale: 'ES',
+      });
+      if (Object.keys(refreshedLinks).length > 0) {
+        setProviderLinks((previous) => ({ ...previous, ...refreshedLinks }));
+      }
+      directProviderUrl = refreshedLinks[provider.provider_id];
+      if (DEBUG_WATCH_LINKS) {
+        console.log('[watch-links][tv] on-demand resolve', {
+          tvId: show.id,
+          providerId: provider.provider_id,
+          linksFound: Object.keys(refreshedLinks).length,
+          directProviderUrl,
+        });
+      }
+    }
+
+    if (directProviderUrl) {
+      const opened = await openExternalUrl(directProviderUrl);
+      if (DEBUG_WATCH_LINKS) {
+        console.log('[watch-links][tv] direct open result', {
+          providerId: provider.provider_id,
+          opened,
+        });
+      }
+      if (opened) return;
+    }
+
+    if (DEBUG_WATCH_LINKS) {
+      console.log('[watch-links][tv] fallback to tmdb watch', {
+        tvId: show.id,
+        providerId: provider.provider_id,
+        fallbackWatchUrl,
+      });
+    }
+    await openExternalUrl(fallbackWatchUrl);
   }
 
   function requestDeleteTrackedTV() {
@@ -386,7 +499,12 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
               </Text>
               <View style={styles.streamingList}>
                 {streaming.providers.map((provider) => (
-                  <View key={provider.provider_id} style={[styles.providerChip, isDark && styles.providerChipDark]}>
+                  <TouchableOpacity
+                    key={provider.provider_id}
+                    style={[styles.providerChip, isDark && styles.providerChipDark]}
+                    activeOpacity={0.85}
+                    onPress={() => void openProviderLink(provider)}
+                  >
                     {provider.logo_path ? (
                       <Image
                         source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
@@ -397,7 +515,7 @@ const TVDetailsScreen: React.FC<TVDetailsScreenProps> = ({
                     <Text style={[styles.providerName, { color: isDark ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
                       {provider.provider_name}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
