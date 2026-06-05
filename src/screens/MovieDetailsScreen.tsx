@@ -4,6 +4,11 @@
 
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
+import DetailBodyLayout from '../components/detail/DetailBodyLayout';
+import DetailHero from '../components/detail/DetailHero';
+import DetailMyLibraryCard from '../components/detail/DetailMyLibraryCard';
+import { createDetailStyles } from '../components/detail/createDetailStyles';
+import { getDetailPalette } from '../components/detail/detailTheme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MagicLoader from '@/components/loaders/MagicLoader';
 import CenteredOverlay from '@/components/layout/CenteredOverlay';
@@ -14,7 +19,6 @@ import {
     Platform,
     SafeAreaView,
     ScrollView,
-    StyleSheet,
     Text,
     TouchableOpacity,
     View,
@@ -64,6 +68,8 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 }) => {
   const RootContainer = Platform.OS === 'web' ? View : SafeAreaView;
   const isDark = useColorScheme() === 'dark';
+  const palette = getDetailPalette(isDark);
+  const detailStyles = useMemo(() => createDetailStyles(palette), [palette]);
   const { movieId, fromFriendId, fromFriendName } = route.params;
   const { data: movie, isLoading, isError, refetch } = useMovieDetails(movieId);
   const addTrackedItem = useTrackingStore((state) => state.addItem);
@@ -334,7 +340,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
   if (isLoading) {
     return (
-      <RootContainer style={styles.container}>
+      <RootContainer style={detailStyles.container}>
         <CenteredOverlay>
           <MagicLoader size={54} text="Cargando detalles..." />
         </CenteredOverlay>
@@ -344,7 +350,7 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
   if (isError) {
     return (
-      <RootContainer style={styles.container}>
+      <RootContainer style={detailStyles.container}>
         <ErrorMessage
           message="No se pudo cargar los detalles de la película"
           onRetry={() => refetch()}
@@ -355,153 +361,104 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
   if (!movie) {
     return (
-      <RootContainer style={styles.container}>
-        <Text>Película no encontrada</Text>
+      <RootContainer style={detailStyles.container}>
+        <Text style={{ color: palette.text }}>Película no encontrada</Text>
       </RootContainer>
     );
   }
 
+  const heroImageUri = movie.poster_path
+    ? `https://image.tmdb.org/t/p/original${movie.backdrop_path || movie.poster_path}`
+    : null;
+
   return (
-    <RootContainer style={[styles.container, isDark && styles.containerDark]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+    <RootContainer style={detailStyles.container}>
+      <ScrollView style={detailStyles.scrollView} contentContainerStyle={detailStyles.scrollContent} showsVerticalScrollIndicator={false}>
+        <DetailHero
+          imageUri={heroImageUri}
+          onBack={() => navigation.goBack()}
+          palette={palette}
+          dark={isDark}
+        />
+
+        <View style={detailStyles.content}>
+          <Text style={detailStyles.title}>{movie.title}</Text>
+
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[styles.backButton, isDark && styles.backButtonDark]}
+            style={[detailStyles.primaryAction, isTracked && detailStyles.primaryActionTracked]}
+            activeOpacity={0.85}
+            onPress={() => {
+              if (trackedMovieItem) {
+                requestDeleteTrackedMovie();
+              } else {
+                setRating(0);
+                setStatus('completed');
+                setWatchedAt('');
+                setWatchedAtApproximate(false);
+                setIsRatingOpen(true);
+              }
+            }}
           >
-            <MaterialIcons name="arrow-back" size={22} color={isDark ? '#E2E8F0' : '#0F172A'} />
-          </TouchableOpacity>
-        </View>
-
-        {movie.poster_path && (
-          <View style={styles.backdropWrap}>
-            <Image
-              source={{
-                uri: `https://image.tmdb.org/t/p/original${movie.backdrop_path || movie.poster_path}`,
-              }}
-              style={styles.backdrop}
-              resizeMode="cover"
+            <MaterialIcons
+              name={isTracked ? 'delete-outline' : 'add'}
+              size={18}
+              color={isTracked ? palette.danger : '#FFFFFF'}
             />
-            <View style={[styles.backdropOverlay, isDark && styles.backdropOverlayDark]} />
-          </View>
-        )}
+            <Text style={[detailStyles.primaryActionText, isTracked && detailStyles.primaryActionTextTracked]}>
+              {isTracked ? 'Eliminar de biblioteca' : 'Añadir a biblioteca'}
+            </Text>
+          </TouchableOpacity>
 
-        <View style={[styles.content, isDark && styles.contentDark]}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: isDark ? '#E5E7EB' : '#333' }]}>{movie.title}</Text>
-            <TouchableOpacity
-              style={[styles.inlineAddButton, isTracked && styles.inlineAddButtonTracked]}
-              onPress={() => {
-                if (trackedMovieItem) {
-                  requestDeleteTrackedMovie();
-                } else {
-                  setRating(0);
-                  setStatus('completed');
-                  setWatchedAt('');
-                  setWatchedAtApproximate(false);
-                  setIsRatingOpen(true);
-                }
-              }}
-            >
-              <MaterialIcons
-                name={isTracked ? 'delete' : 'add'}
-                size={18}
-                color={isTracked ? '#B91C1C' : '#FFFFFF'}
-              />
-              <Text style={[styles.inlineAddText, isTracked && styles.inlineAddTextTracked]}>
-                {isTracked ? 'Eliminar' : 'Añadir'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {trackedMovieItem && (
-            <View style={[styles.myDataCard, isDark && styles.myDataCardDark]}>
-              <TouchableOpacity style={[styles.editDataButton, isDark && styles.editDataButtonDark]} onPress={openEditor}>
-                <MaterialIcons name="edit" size={14} color="#0E7490" />
-              </TouchableOpacity>
-              <View style={styles.myDataTopRow}>
-                <View
-                  style={[
-                    styles.statusPill,
-                    isDark && styles.statusPillDark,
-                    {
-                      borderColor: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').border,
-                      backgroundColor: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').bg,
-                    },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="flag"
-                    size={13}
-                    color={statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').color}
-                  />
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      { color: statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned').color },
-                    ]}
-                  >
-                    {statusLabel((trackedMovieItem.status as 'planned' | 'completed') || 'planned')}
-                  </Text>
-                </View>
-                <Text style={[styles.ratingLine, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>⭐️ {ratingValue(trackedMovieItem.rating ?? 0)}</Text>
+          <DetailBodyLayout
+            styles={detailStyles}
+            hasSidebar={Boolean(trackedMovieItem || visibleFriendsRatings.length > 0 || (!trackedMovieItem && friendTrackedItem))}
+            main={
+              <>
+          <View style={detailStyles.metaRow}>
+            {movie.runtime ? (
+              <View style={detailStyles.metaChip}>
+                <MaterialIcons name="schedule" size={14} color={palette.subtext} />
+                <Text style={detailStyles.metaChipText}>{movie.runtime} min</Text>
               </View>
-              <Text style={[styles.myDataDate, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                Visto: {formatShortDate(trackedMovieItem.watchedAt)}
-              </Text>
+            ) : null}
+            <View style={detailStyles.metaChip}>
+              <MaterialIcons name="star-outline" size={14} color={palette.subtext} />
+              <Text style={detailStyles.metaChipText}>{movie.vote_average.toFixed(1)}/10</Text>
             </View>
-          )}
-          {!trackedMovieItem && friendTrackedItem && (
-            <View style={[styles.friendDataCard, isDark && styles.friendDataCardDark]}>
-              <Text style={[styles.friendDataText, { color: isDark ? '#E5E7EB' : '#1E293B' }]}>
-                {fromFriendName || 'Tu amigo/a'} ha puntuado esta película con{' '}
-                {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
-              </Text>
-            </View>
-          )}
-          <FriendsRatingsBlock itemLabel="película" ratings={visibleFriendsRatings} />
-
-          <View style={styles.info}>
-            {movie.runtime && (
-              <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
-                <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>⏱️ {movie.runtime} min</Text>
-              </View>
-            )}
-            <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
-              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>🌐 {movie.vote_average.toFixed(1)}/10</Text>
-            </View>
-            <View style={[styles.metaChip, isDark && styles.metaChipDark]}>
-              <Text style={[styles.infoText, { color: isDark ? '#CBD5E1' : '#334155' }]}>📅 {new Date(movie.release_date).getFullYear()}</Text>
+            <View style={detailStyles.metaChip}>
+              <MaterialIcons name="calendar-today" size={13} color={palette.subtext} />
+              <Text style={detailStyles.metaChipText}>{new Date(movie.release_date).getFullYear()}</Text>
             </View>
           </View>
 
           {trailerUrl ? (
-            <TouchableOpacity style={[styles.trailerButton, isDark && styles.trailerButtonDark]} onPress={() => void openTrailer()}>
-              <MaterialIcons name="play-circle-filled" size={18} color="#FFFFFF" />
-              <Text style={styles.trailerButtonText}>Ver tráiler</Text>
+            <TouchableOpacity style={detailStyles.trailerButton} activeOpacity={0.85} onPress={() => void openTrailer()}>
+              <MaterialIcons name="play-circle-outline" size={20} color={palette.brand} />
+              <Text style={detailStyles.trailerButtonText}>Ver tráiler</Text>
             </TouchableOpacity>
           ) : null}
 
           {streaming.providers.length > 0 ? (
-            <View style={styles.streamingWrap}>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A', marginTop: 2 }]}>
-                Dónde verla {streaming.region ? `(${streaming.region})` : ''}
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>
+                Dónde verla {streaming.region ? `· ${streaming.region}` : ''}
               </Text>
-              <View style={styles.streamingList}>
+              <View style={detailStyles.chipRow}>
                 {streaming.providers.map((provider) => (
                   <TouchableOpacity
                     key={provider.provider_id}
-                    style={[styles.providerChip, isDark && styles.providerChipDark]}
+                    style={detailStyles.providerChip}
                     activeOpacity={0.85}
                     onPress={() => void openProviderLink(provider)}
                   >
                     {provider.logo_path ? (
                       <Image
                         source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
-                        style={styles.providerLogo}
+                        style={detailStyles.providerLogo}
                         resizeMode="cover"
                       />
                     ) : null}
-                    <Text style={[styles.providerName, { color: isDark ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
+                    <Text style={detailStyles.providerName} numberOfLines={1}>
                       {provider.provider_name}
                     </Text>
                   </TouchableOpacity>
@@ -510,21 +467,50 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
             </View>
           ) : null}
 
-          {movie.genres && movie.genres.length > 0 && (
-            <View style={styles.genres}>
-              {movie.genres.map((genre) => (
-                <View key={genre.id} style={styles.genreTag}>
-                  <Text style={styles.genreText}>{genre.name}</Text>
-                </View>
-              ))}
+          {movie.genres && movie.genres.length > 0 ? (
+            <View style={detailStyles.sectionBlock}>
+              <Text style={detailStyles.sectionTitle}>Géneros</Text>
+              <View style={detailStyles.chipRow}>
+                {movie.genres.map((genre) => (
+                  <View key={genre.id} style={detailStyles.genreTag}>
+                    <Text style={detailStyles.genreText}>{genre.name}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          )}
+          ) : null}
 
-          <Text style={[styles.sectionTitle, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>Sinopsis</Text>
-          <View style={[styles.descriptionCard, isDark && styles.descriptionCardDark]}>
-            <Text style={[styles.description, { color: isDark ? '#CBD5E1' : '#475569' }]}>{synopsisText}</Text>
+          <View style={detailStyles.synopsisBlock}>
+            <Text style={detailStyles.sectionTitle}>Sinopsis</Text>
+            <Text style={detailStyles.synopsisText}>{synopsisText}</Text>
           </View>
-
+              </>
+            }
+            sidebar={
+              <>
+                {trackedMovieItem ? (
+                  <DetailMyLibraryCard
+                    palette={palette}
+                    styles={detailStyles}
+                    statusLabel={statusLabel((trackedMovieItem.status as 'planned' | 'completed') || 'planned')}
+                    statusTone={statusTone((trackedMovieItem.status as 'planned' | 'completed') || 'planned')}
+                    ratingText={ratingValue(trackedMovieItem.rating ?? 0)}
+                    dateText={`Visto: ${formatShortDate(trackedMovieItem.watchedAt)}`}
+                    onEdit={openEditor}
+                  />
+                ) : null}
+                {!trackedMovieItem && friendTrackedItem ? (
+                  <View style={detailStyles.friendHint}>
+                    <Text style={detailStyles.friendHintText}>
+                      {fromFriendName || 'Tu amigo/a'} ha puntuado esta película con{' '}
+                      {typeof friendTrackedItem.rating === 'number' ? `${friendTrackedItem.rating.toFixed(1)} ⭐️` : 'sin puntuación'}.
+                    </Text>
+                  </View>
+                ) : null}
+                <FriendsRatingsBlock itemLabel="película" ratings={visibleFriendsRatings} variant="sidebar" />
+              </>
+            }
+          />
         </View>
       </ScrollView>
       <RatingPickerModal
@@ -557,327 +543,5 @@ const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
     </RootContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  containerDark: {
-    backgroundColor: '#111827',
-  },
-  scrollContent: {
-    paddingBottom: 26,
-  },
-  scrollView: {
-    ...(Platform.OS === 'web' ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any) : {}),
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(248,250,252,0.88)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.4)',
-  },
-  backButtonDark: {
-    backgroundColor: 'rgba(15,23,42,0.76)',
-    borderColor: 'rgba(100,116,139,0.46)',
-  },
-  backdrop: {
-    width: '100%',
-    height: 340,
-  },
-  backdropWrap: {
-    position: 'relative',
-  },
-  backdropOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.32)',
-  },
-  backdropOverlayDark: {
-    backgroundColor: 'rgba(2,6,23,0.52)',
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    marginTop: -30,
-    marginHorizontal: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    elevation: 8,
-  },
-  contentDark: {
-    borderColor: '#1E293B',
-    backgroundColor: '#0B1220',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
-  },
-  title: {
-    flex: 1,
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#333',
-    letterSpacing: 0.2,
-  },
-  inlineAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#0E7490',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  inlineAddButtonTracked: {
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1,
-    borderColor: '#B91C1C',
-  },
-  inlineAddText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  inlineAddTextTracked: {
-    color: '#B91C1C',
-  },
-  myDataCard: {
-    marginTop: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  myDataCardDark: {
-    backgroundColor: '#111827',
-    borderColor: '#334155',
-  },
-  friendDataCard: {
-    marginTop: 4,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  friendDataCardDark: {
-    backgroundColor: '#1F2937',
-    borderColor: '#92400E',
-  },
-  friendDataText: {
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  editDataButton: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ECFEFF',
-    borderWidth: 1,
-    borderColor: '#A5F3FC',
-    zIndex: 20,
-    elevation: 4,
-  },
-  editDataButtonDark: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
-  },
-  myDataTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#67E8F9',
-    backgroundColor: '#ECFEFF',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusPillDark: {
-    borderColor: '#334155',
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0E7490',
-  },
-  ratingLine: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  myDataDate: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  info: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  metaChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#CFFAFE',
-    backgroundColor: '#F0FDFF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  metaChipDark: {
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '700',
-  },
-  trailerButton: {
-    marginTop: -2,
-    marginBottom: 14,
-    borderRadius: 12,
-    backgroundColor: '#0E7490',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  trailerButtonDark: {
-    backgroundColor: '#1E40AF',
-  },
-  trailerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  streamingWrap: {
-    marginBottom: 14,
-  },
-  streamingList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  providerChip: {
-    maxWidth: 140,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  providerChipDark: {
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-  },
-  providerLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: '#E2E8F0',
-  },
-  providerName: {
-    flexShrink: 1,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  genres: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  genreTag: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  genreText: {
-    fontSize: 12,
-    color: '#0369A1',
-    fontWeight: '700',
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    color: '#333',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  descriptionCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 20,
-  },
-  descriptionCardDark: {
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#666',
-  },
-});
 
 export default MovieDetailsScreen;

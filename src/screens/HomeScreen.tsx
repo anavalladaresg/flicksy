@@ -342,8 +342,12 @@ function SectionRow({
             {type === 'movie' ? 'Películas' : type === 'tv' ? 'Series' : 'Videojuegos'}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => navigateAndBlur(`/browse/${type}`)} style={[styles.moreButton, dark && styles.moreButtonDark, Platform.OS === 'web' && styles.webPressableReset]}>
-          <MaterialIcons name="chevron-right" size={20} color={dark ? palette.brand : palette.text} />
+        <TouchableOpacity
+          onPress={() => navigateAndBlur(`/browse/${type}`)}
+          style={[styles.seeAllButton, Platform.OS === 'web' && styles.webPressableReset]}
+        >
+          <Text style={[styles.seeAllText, { color: dark ? palette.brand : palette.text }]}>Ver todo</Text>
+          <MaterialIcons name="chevron-right" size={16} color={dark ? palette.brand : palette.text} />
         </TouchableOpacity>
       </View>
       <FlatList
@@ -467,6 +471,7 @@ function SectionRow({
 
 function PersonalizedRow({
   title,
+  subtitle,
   items,
   dark,
   onDismiss,
@@ -474,6 +479,7 @@ function PersonalizedRow({
   palette,
 }: {
   title: string;
+  subtitle: string;
   items: RecommendationItem[];
   dark: boolean;
   onDismiss: (item: RecommendationItem) => void;
@@ -589,7 +595,7 @@ function PersonalizedRow({
         <View>
           <Text style={[styles.sectionTitle, { color: palette.text }]}>{title}</Text>
           <Text style={[styles.sectionEyebrow, { color: palette.subtext }]}>
-            Basado en tu biblioteca
+            {subtitle}
           </Text>
         </View>
       </View>
@@ -905,7 +911,7 @@ function FriendsActivityPopover({
       {...(Platform.OS === 'web' ? ({ role: 'dialog', 'aria-label': 'Actividad de amigos' } as any) : {})}
     >
       {/* Cabecera compacta del popover */}
-      <View style={styles.friendPopoverHeader}>
+      <View style={[styles.friendPopoverHeader, { borderBottomColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
         <MaterialIcons name="groups" size={14} color={palette.brand} style={{ flexShrink: 0 } as any} />
         <View style={styles.friendPopoverHeaderText}>
           <Text style={[styles.friendPopoverTitle, { color: palette.text }]} numberOfLines={1}>
@@ -1084,10 +1090,10 @@ function HomeScreen() {
     for (const type of typePriority) {
       const baseReason =
         favoriteByType[type]?.rating && (favoriteByType[type]?.rating ?? 0) >= 7
-          ? `Porque te gustó ${favoriteByType[type]?.title}`
+          ? `Similar a ${favoriteByType[type]?.title}`
           : favoriteByType[type]
-            ? `Basado en tu ${type === 'game' ? 'actividad de juegos' : type === 'tv' ? 'actividad de series' : 'actividad de películas'}`
-            : 'Basado en tu biblioteca';
+            ? `Por tu interés en ${type === 'game' ? 'juegos' : type === 'tv' ? 'series' : 'películas'}`
+            : 'Por tus gustos';
 
       const top = byTypeCandidates[type].slice(0, perTypeTake).map((item) => ({
         ...item,
@@ -1193,6 +1199,12 @@ function HomeScreen() {
           isWeb && styles.scrollContentWeb,
           isWebMobile && styles.scrollContentWebMobile,
         ]}
+        onScroll={(e) => {
+          if (friendsPopoverOpen) {
+            setFriendsPopoverOpen(false);
+          }
+        }}
+        scrollEventThrottle={16}
       >
         <View style={styles.homeLayout}>
           <View style={styles.homeMainColumn}>
@@ -1357,12 +1369,13 @@ function HomeScreen() {
                   {'Amigos'}{friendsActivity.length > 0 ? ` · ${friendsActivity.length}` : ''}
                 </Text>
                 {friendsActivity.length > 0 && !friendsPopoverOpen ? (
-                  <View style={[styles.friendsBadgeDot, { backgroundColor: palette.positive }]} />
+                  <View style={[styles.friendsBadgeDot, { backgroundColor: palette.positive, borderColor: isDark ? palette.bg : '#F8F6F1' }]} />
                 ) : null}
               </TouchableOpacity>
             </Animated.View>
             <PersonalizedRow
               title="Recomendaciones"
+              subtitle="Sugerencias para ti"
               items={personalized.safe}
               dark={isDark}
               onDismiss={handleDismissRecommendation}
@@ -1371,6 +1384,7 @@ function HomeScreen() {
             />
             <PersonalizedRow
               title="Descubrimiento"
+              subtitle="Explora algo nuevo"
               items={personalized.discovery}
               dark={isDark}
               onDismiss={handleDismissRecommendation}
@@ -1399,8 +1413,8 @@ function HomeScreen() {
                 <MaterialIcons name="local-fire-department" size={17} color={palette.brand} />
               </View>
               <View>
-                <Text style={[styles.sectionLabelText, { color: palette.text }]}>Tendencias mundiales</Text>
-                <Text style={[styles.sectionLabelSubtext, { color: palette.subtext }]}>Lo que más se está moviendo ahora</Text>
+                <Text style={[styles.sectionLabelText, { color: palette.text }]}>Lo más popular</Text>
+                <Text style={[styles.sectionLabelSubtext, { color: palette.subtext }]}>Los más valorados por la comunidad</Text>
               </View>
             </Animated.View>
 
@@ -1664,21 +1678,18 @@ const styles = StyleSheet.create({
   heroBadge: {
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(8,145,178,0.2)',
-    backgroundColor: 'rgba(248,246,241,0.58)',
+    paddingVertical: 4,
+    backgroundColor: 'rgba(236,232,224,0.45)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   heroBadgeDark: {
-    borderColor: 'rgba(42,53,69,0.42)',
-    backgroundColor: 'rgba(26,35,48,0.34)',
+    backgroundColor: 'rgba(26,35,48,0.4)',
   },
   heroBadgeText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   sectionLabelRow: {
     flexDirection: 'row',
@@ -1686,8 +1697,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginHorizontal: 16,
     paddingHorizontal: 4,
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: 28,
+    marginBottom: 4,
     paddingVertical: 4,
   },
   sectionLabelRowDark: {
@@ -1714,7 +1725,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   section: {
-    marginTop: 16,
+    marginTop: 12,
     marginHorizontal: 16,
   },
   sectionCard: {
@@ -1740,7 +1751,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 2,
+    paddingHorizontal: 0,
     marginBottom: 12,
   },
   sectionTitle: {
@@ -1826,7 +1837,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(122,112,96,0.12)',
+    borderColor: 'rgba(0,0,0,0.06)',
     backgroundColor: 'rgba(250,248,244,0.97)',
     padding: 10,
     ...(Platform.OS === 'web' && {
@@ -1843,7 +1854,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(122,112,96,0.12)',
+    borderColor: 'rgba(0,0,0,0.06)',
     backgroundColor: 'rgba(250,248,244,0.98)',
     padding: 10,
     ...(Platform.OS === 'web' && {
@@ -1852,10 +1863,10 @@ const styles = StyleSheet.create({
     } as any),
   },
   friendPopoverDark: {
-    borderColor: 'rgba(42,53,69,0.44)',
+    borderColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(18,24,33,0.97)',
     ...(Platform.OS === 'web' && {
-      boxShadow: '0 6px 28px rgba(0,0,0,0.42), inset 0 1px 0 rgba(230,237,243,0.03)',
+      boxShadow: '0 6px 28px rgba(0,0,0,0.42)',
     } as any),
   },
   friendPopoverHeader: {
@@ -2013,6 +2024,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26,35,48,0.72)',
     borderColor: 'rgba(124,158,255,0.18)',
   },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    ...(Platform.OS === 'web' && {
+      transitionDuration: '150ms',
+      transitionProperty: 'opacity',
+      transitionTimingFunction: 'ease',
+    } as any),
+  },
+  seeAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
   listContent: {
     paddingHorizontal: 0,
     paddingRight: 18,
@@ -2021,7 +2050,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: HOME_CARD_WIDTH,
-    marginHorizontal: HOME_CARD_GAP / 2,
+    marginRight: HOME_CARD_GAP,
     position: 'relative',
     overflow: 'visible',
   },
@@ -2078,6 +2107,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     backgroundColor: 'rgba(236,232,224,0.68)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,112,96,0.16)',
     gap: 4,
   },
   cardMetaRowDark: {

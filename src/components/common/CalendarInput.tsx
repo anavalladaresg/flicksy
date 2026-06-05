@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useEscapeClose } from '../../hooks/use-escape-close';
+import { getDetailPalette } from '../detail/detailTheme';
 
 interface CalendarInputProps {
   label: string;
@@ -24,6 +25,7 @@ interface CalendarInputProps {
   rangeEnd?: string;
   onChangeRange?: (start: string, end: string) => void;
   onChangeApproximateRange?: (startApproximate: boolean, endApproximate: boolean) => void;
+  tone?: 'default' | 'premium';
 }
 
 function parseDate(value: string): Date {
@@ -75,8 +77,11 @@ function CalendarInput({
   rangeEnd = '',
   onChangeRange,
   onChangeApproximateRange,
+  tone = 'default',
 }: CalendarInputProps) {
   const isDark = useColorScheme() === 'dark';
+  const palette = getDetailPalette(isDark);
+  const isPremium = tone === 'premium';
   const [open, setOpen] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
   useEscapeClose(open, () => setOpen(false));
@@ -129,19 +134,32 @@ function CalendarInput({
 
   return (
     <View>
-      <Text style={[styles.label, { color: isDark ? '#CBD5E1' : '#334155' }]}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          isPremium && styles.labelPremium,
+          { color: isPremium ? palette.subtext : isDark ? '#CBD5E1' : '#334155' },
+        ]}
+      >
+        {label}
+      </Text>
       <TouchableOpacity
         style={[
           styles.inputLike,
+          isPremium && styles.inputLikePremium,
           {
-            borderColor: isDark ? '#334155' : '#CBD5E1',
-            backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+            borderColor: isPremium ? palette.border : isDark ? '#334155' : '#CBD5E1',
+            backgroundColor: isPremium ? palette.surface : isDark ? '#0F172A' : '#F8FAFC',
           },
         ]}
         onPress={() => setOpen(true)}
       >
-        <MaterialIcons name="calendar-today" size={16} color={isDark ? '#94A3B8' : '#475569'} />
-        <Text style={[styles.inputText, { color: isDark ? '#E5E7EB' : '#0F172A' }]}>
+        <MaterialIcons
+          name="calendar-today"
+          size={16}
+          color={isPremium ? palette.brand : isDark ? '#94A3B8' : '#475569'}
+        />
+        <Text style={[styles.inputText, { color: isPremium ? palette.text : isDark ? '#E5E7EB' : '#0F172A' }]}>
           {mode === 'range' ? prettyRange(rangeStart, rangeEnd) || placeholder : toHumanDate(value) || placeholder}
         </Text>
         {approximate || (mode === 'range' && (!rangeStart || !rangeEnd)) ? <Text style={styles.approxBadge}>Fecha no exacta</Text> : null}
@@ -149,7 +167,16 @@ function CalendarInput({
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={styles.backdrop}>
-          <View style={[styles.card, isDark && styles.cardDark]}>
+          <View
+            style={[
+              styles.card,
+              isDark && styles.cardDark,
+              isPremium && {
+                backgroundColor: palette.elevated,
+                borderColor: palette.border,
+              },
+            ]}
+          >
             <View style={styles.navRow}>
               <TouchableOpacity onPress={() => setCursor(new Date(year, month - 1, 1))}>
                 <MaterialIcons name="chevron-left" size={22} color={isDark ? '#E5E7EB' : '#0F172A'} />
@@ -186,7 +213,10 @@ function CalendarInput({
                     style={[
                       styles.dayCell,
                       { width: cellSize, height: cellSize },
-                      selectedInRange && styles.dayCellInRange,
+                      selectedInRange && {
+                        backgroundColor: isPremium ? palette.brandMuted : 'rgba(14,116,144,0.16)',
+                        borderRadius: 8,
+                      },
                     ]}
                     onPress={() => {
                       const dateString = toDateString(date);
@@ -216,7 +246,14 @@ function CalendarInput({
                       setOpen(false);
                     }}
                   >
-                    <View style={[styles.dayInner, (selectedMatch || selectedEndMatch) && styles.dayInnerSelected]}>
+                    <View
+                      style={[
+                        styles.dayInner,
+                        (selectedMatch || selectedEndMatch) && {
+                          backgroundColor: isPremium ? palette.brand : '#0E7490',
+                        },
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.dayText,
@@ -269,6 +306,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  labelPremium: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
   inputLike: {
     marginTop: 6,
     borderWidth: 1,
@@ -278,6 +321,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  inputLikePremium: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
   inputText: {
     fontSize: 14,
@@ -345,13 +393,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dayInnerSelected: {
-    backgroundColor: '#0E7490',
-  },
-  dayCellInRange: {
-    backgroundColor: 'rgba(14,116,144,0.16)',
-    borderRadius: 8,
   },
   dayText: {
     fontSize: 14,
